@@ -1,0 +1,14 @@
+{
+  "output": {
+    "message": {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "Sure! Here is the structured query you requested:\n\n{\"brand\": \"Apple\", \"model\": \"iPhone 13\", \"attributes\": {\"storage\": \"128GB\"}, \"condition\": \"good\", \"search_query\": \"Apple iPhone 13 128GB\"}\n\nLet me know if you need anything else!"
+        }
+      ]
+    }
+  },
+  "stopReason": "end_turn",
+  "usage": {"inputTokens": 120, "outputTokens": 60, "totalTokens": 180}
+}

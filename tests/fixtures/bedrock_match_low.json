@@ -1,0 +1,10 @@
+{
+  "output": {
+    "message": {
+      "role": "assistant",
+      "content": [{"text": "{\"score\": 0.21, \"rationale\": \"Different model — this is a case, not the phone itself.\"}"}]
+    }
+  },
+  "stopReason": "end_turn",
+  "usage": {"inputTokens": 80, "outputTokens": 20, "totalTokens": 100}
+}

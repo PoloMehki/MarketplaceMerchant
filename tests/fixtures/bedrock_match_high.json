@@ -1,0 +1,10 @@
+{
+  "output": {
+    "message": {
+      "role": "assistant",
+      "content": [{"text": "{\"score\": 0.92, \"rationale\": \"Same model, storage, and unlocked status.\"}"}]
+    }
+  },
+  "stopReason": "end_turn",
+  "usage": {"inputTokens": 80, "outputTokens": 20, "totalTokens": 100}
+}

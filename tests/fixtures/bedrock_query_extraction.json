@@ -1,0 +1,14 @@
+{
+  "output": {
+    "message": {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "```json\n{\"brand\": \"Apple\", \"model\": \"iPhone 13\", \"attributes\": {\"storage\": \"128GB\", \"color\": \"midnight\", \"lock_status\": \"unlocked\"}, \"condition\": \"good\", \"search_query\": \"Apple iPhone 13 128GB unlocked\"}\n```"
+        }
+      ]
+    }
+  },
+  "stopReason": "end_turn",
+  "usage": {"inputTokens": 120, "outputTokens": 45, "totalTokens": 165}
+}
