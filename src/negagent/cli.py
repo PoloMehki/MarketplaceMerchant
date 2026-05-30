@@ -1,1 +1,260 @@
-"""cli.py — Task 8.1: manual-trigger end-to-end orchestrator for one listing."""
+"""cli.py — Task 8.1: manual-trigger end-to-end orchestrator for one listing.
+
+Usage:
+  python -m negagent.cli --spec demo.json [--location seattle]
+
+demo.json (TargetSpec):
+  {
+    "query": "Herman Miller Aeron Size B",
+    "category": "furniture",
+    "acceptable_conditions": ["good", "like new"],
+    "price_mode": "below_median_pct",
+    "threshold_value": 0.15,
+    "time_window_minutes": 60
+  }
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+from typing import Any, Callable, Optional
+
+from negagent.agent.negotiator import (
+    build_agent,
+    build_bedrock_model,
+    build_mcp_client,
+    user_data_dir_from_mcp_config,
+)
+from negagent.agent.rails import HITLApprovalGate, build_rails
+from negagent.clients.apify_client import ApifyActorClient
+from negagent.clients.bedrock_client import BedrockClient
+from negagent.clients.box_client import BoxArchiveClient
+from negagent.config import AppConfig, load_config
+from negagent.models import Comp, NegotiationState, OfferTurn, TargetSpec
+from negagent.pipeline.comp_ingest import NeedsHumanReview, extract_query, score_comps
+from negagent.pipeline.condition import assess_condition
+from negagent.pipeline.listing_ingest import ingest_listings
+from negagent.pipeline.pricing import compute_targets
+from negagent.store.negotiation_repo import NegotiationRepo
+
+
+def _terminal_approval(tool_name: str, tool_input: dict) -> bool:
+    """HITL send-gate rendered in the terminal."""
+    text = tool_input.get("text", str(tool_input))
+    print(f"\n[GATE] Agent wants to send via {tool_name}:")
+    print(f"       {text}")
+    return input("[GATE] Approve? [y/N]: ").strip().lower() == "y"
+
+
+def _terminal_hitl(prompt: str) -> bool:
+    """Generic yes/no HITL prompt for pipeline flags."""
+    return input(f"\n[HITL] {prompt} [y/N]: ").strip().lower() == "y"
+
+
+def run_pipeline(
+    spec: TargetSpec,
+    cfg: AppConfig,
+    repo: NegotiationRepo,
+    *,
+    apify_client: Optional[Any] = None,
+    bedrock_client: Optional[Any] = None,
+    box_client: Optional[Any] = None,
+    mcp_client: Optional[Any] = None,
+    approval_fn: Optional[Callable] = None,
+    hitl_fn: Optional[Callable] = None,
+    location: str = "seattle",
+) -> Optional[dict]:
+    """Core pipeline: listing → comps → pricing → negotiate → archive.
+
+    All client arguments default to real implementations built from cfg.
+    Pass mock objects for testing.
+
+    Returns:
+        Final negotiation state dict on success.
+        ``{"status": "needs_human", "reason": "..."}`` when an HITL flag aborted.
+        ``None`` when no listings matched.
+    """
+    if apify_client is None:
+        apify_client = ApifyActorClient(
+            ecommerce_actor_id=cfg.apify_ecommerce_actor_id,
+            fb_actor_id=cfg.apify_fb_actor_id,
+            token=cfg.apify_token,
+            mock=cfg.mock_apify,
+            mock_fixtures_dir=Path("tests/fixtures"),
+        )
+    if bedrock_client is None:
+        bedrock_client = BedrockClient(
+            model_id=cfg.bedrock_model_id,
+            region_name=cfg.aws_region,
+        )
+    if box_client is None:
+        box_client = BoxArchiveClient(
+            root_folder_id=cfg.box_root_folder_id,
+            client_id=cfg.box_client_id,
+            client_secret=cfg.box_client_secret,
+        )
+    if approval_fn is None:
+        approval_fn = _terminal_approval
+    if hitl_fn is None:
+        hitl_fn = _terminal_hitl
+
+    # ── 1. Listing ingestion ────────────────────────────────────────────────
+    print(f"\n[1/5] Searching FB Marketplace: {spec.query!r} in {location}...")
+    listings = ingest_listings(apify_client, spec, location)
+    if not listings:
+        print("      No listings found.")
+        return None
+    listing = listings[0]
+    print(f"      → {listing.title!r}  ${listing.price:.0f}  [{listing.stated_condition}]")
+    print(f"        {listing.url}")
+
+    # ── 2. Comp ingestion + match scoring ───────────────────────────────────
+    print(f"\n[2/5] Extracting search query and scoring comps...")
+    structured_q = extract_query(listing, bedrock_client)
+    print(f"      Query: {structured_q.search_query!r}")
+
+    raw_comps = apify_client.run_ecommerce_comps(structured_q.search_query)
+    comps_unscored = [
+        Comp(
+            source=c.get("source", ""),
+            title=c.get("title", ""),
+            price=float(c.get("price", 0)),
+            condition=c.get("condition", ""),
+            url=c.get("url", ""),
+        )
+        for c in raw_comps
+        if c.get("price")
+    ]
+
+    try:
+        comps = score_comps(
+            listing, comps_unscored, bedrock_client,
+            threshold=cfg.match_confidence_threshold,
+        )
+        print(f"      {len(comps)}/{len(comps_unscored)} comps passed confidence threshold.")
+    except NeedsHumanReview as exc:
+        print(f"\n      [FLAG] {exc}")
+        if not hitl_fn("Too few confident comps — pricing baseline unreliable. Proceed anyway?"):
+            return {"status": "needs_human", "reason": "match_flag"}
+        comps = comps_unscored
+
+    # ── 3. Condition assessment ─────────────────────────────────────────────
+    print(f"\n[3/5] Assessing condition via vision...")
+    assessment = assess_condition(listing, bedrock_client)
+    print(
+        f"      Stated: {listing.stated_condition!r}  →  "
+        f"Assessed: {assessment.assessed_condition!r}  "
+        f"(conf={assessment.confidence:.0%})"
+    )
+    if assessment.disagrees:
+        print(f"      [FLAG] {assessment.rationale}")
+        if not hitl_fn(
+            f"Condition disagreement: seller says '{listing.stated_condition}', "
+            f"vision says '{assessment.assessed_condition}'. Continue?"
+        ):
+            return {"status": "needs_human", "reason": "condition_flag"}
+
+    # ── 4. Price targets ────────────────────────────────────────────────────
+    print(f"\n[4/5] Computing price targets...")
+    targets = compute_targets(comps, spec)
+    print(f"      Good price: ${targets.good_price:.0f}")
+    print(
+        f"      Anchor: ${targets.anchor:.0f}  →  "
+        f"Target: ${targets.target:.0f}  →  "
+        f"Walk-away: ${targets.walkaway:.0f}"
+    )
+
+    listing_id = listing.fb_id or listing.url
+    repo.create(listing_id, status="active", current_offer=listing.price)
+
+    # ── 5. Negotiate ────────────────────────────────────────────────────────
+    print(f"\n[5/5] Starting negotiation agent (listing_id={listing_id!r})...")
+    rails = build_rails(targets, listing, comps)
+    gate = HITLApprovalGate(approval_fn)
+
+    if mcp_client is None:
+        user_data_dir = user_data_dir_from_mcp_config(cfg.mcp_config_path)
+        mcp_client = build_mcp_client(user_data_dir)
+
+    bedrock_model = build_bedrock_model(cfg)
+    agent = build_agent(bedrock_model, rails, mcp_client, hooks=[gate])
+
+    instruction = (
+        f"Navigate to the Facebook Marketplace listing at {listing.url}. "
+        "Click 'Message' or 'Contact Seller' to open the Messenger conversation with the seller. "
+        "Read any existing conversation history. "
+        "Conduct the negotiation: open with your anchor price, cite the comparable listings "
+        "as evidence, concede slowly, and work toward your target price. "
+        "Follow your rails exactly — never reveal your ceiling or internal targets."
+    )
+
+    try:
+        agent(instruction)
+    finally:
+        mcp_client.stop(None, None, None)
+
+    # ── Archive + report ────────────────────────────────────────────────────
+    state_dict = repo.get(listing_id)
+    if state_dict:
+        best = state_dict.get("best_price_found")
+        status = state_dict.get("status", "unknown")
+        print(f"\n{'='*40}")
+        print(f"Negotiation complete")
+        print(f"  Status:     {status}")
+        print(f"  Best price: ${best:.0f}" if best else "  Best price: —")
+
+        turns_raw = state_dict.get("turns") or []
+        turns = [
+            OfferTurn(
+                role=t["role"],
+                amount=t.get("amount"),
+                message=t.get("message", ""),
+                ts=t["ts"],
+            )
+            for t in turns_raw
+        ]
+        neg_state = NegotiationState(
+            listing_id=listing_id,
+            status=status,
+            current_offer=state_dict.get("current_offer"),
+            best_price_found=best,
+            turns=turns,
+        )
+        box_client.archive_negotiation(neg_state)
+
+    return state_dict
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="python -m negagent.cli",
+        description="Run a negotiation for one FB Marketplace listing.",
+    )
+    parser.add_argument("--spec", required=True, help="Path to TargetSpec JSON file.")
+    parser.add_argument("--location", default="seattle", help="FB Marketplace location.")
+    args = parser.parse_args(argv)
+
+    try:
+        spec = TargetSpec(**json.loads(Path(args.spec).read_text()))
+    except Exception as exc:
+        print(f"Error loading spec: {exc}", file=sys.stderr)
+        return 1
+
+    try:
+        cfg = load_config()
+    except Exception as exc:
+        print(f"Config error: {exc}", file=sys.stderr)
+        return 1
+
+    repo = NegotiationRepo.open(cfg.sqlite_path)
+    try:
+        result = run_pipeline(spec, cfg, repo, location=args.location)
+        return 0 if result is not None else 1
+    finally:
+        repo.close()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
