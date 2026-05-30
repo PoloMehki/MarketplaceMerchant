@@ -1,9 +1,11 @@
-"""rails.py — Task 6.1: negotiation system prompt + numeric guardrails.
+"""rails.py — Tasks 6.1 + 6.3: negotiation system prompt, numeric guardrails,
+and the HITL approval gate.
 
 Builds the Bedrock system prompt that constrains the negotiation agent to five
-hard rails, and provides code-level numeric guardrails (validate_offer /
-validate_concession) enforced independently of the prompt — the model is never
-trusted to respect the ceiling on its own.
+hard rails, provides code-level numeric guardrails (validate_offer /
+validate_concession) enforced independently of the prompt, and implements
+HITLApprovalGate — the BeforeToolCallEvent hook that intercepts send-type
+Playwright tool calls and requires explicit human approval before they fire.
 
 Model-agnostic by design: the builders duck-type their inputs (PriceTargets,
 Listing, Comp from models.py, Task 1.1, Dev A) via attribute access, so this
@@ -12,14 +14,19 @@ attributes works — real pydantic models or test stand-ins.
 
 Prompt text is intentionally ASCII-only so it renders/encodes cleanly on a
 Windows (cp1252) console and in any logging sink.
-
-NOTE: the HITL approval_gate (Task 6.3) will be added to this module next; this
-file currently implements Task 6.1 only.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, Optional
+from typing import Callable, Iterable, Optional
+
+from strands.hooks import BeforeToolCallEvent, HookProvider, HookRegistry
+
+# Playwright tool names that write content to the page (message composer).
+# Navigate / snapshot / screenshot are reads and are never intercepted.
+SEND_TOOLS: frozenset[str] = frozenset(
+    {"browser_type", "browser_fill_form", "browser_press_key"}
+)
 
 # How many comparable listings to cite in the prompt (keep it tight).
 _MAX_COMPS_IN_PROMPT = 8
@@ -153,3 +160,36 @@ def build_rails(
         walkaway=float(targets.walkaway),
         max_concession_per_turn=cap,
     )
+
+
+class HITLApprovalGate(HookProvider):
+    """BeforeToolCallEvent hook that gates send-type Playwright tool calls.
+
+    Read-only tools (navigate, snapshot, screenshot, etc.) pass through without
+    interruption. Any tool in SEND_TOOLS is intercepted: ``approval_fn`` is
+    called with (tool_name, tool_input) and must return True to allow the call.
+    On False, ``event.cancel_tool`` is set and the agent is asked to revise.
+
+    This is the single most important safety/ToS control: the agent only drafts;
+    a human authorizes every send.
+
+    Args:
+        approval_fn: Callable(tool_name: str, tool_input: dict) -> bool.
+            The CLI wires a terminal prompt here; tests pass a lambda.
+    """
+
+    def __init__(self, approval_fn: Callable[[str, dict], bool]) -> None:
+        self._approval_fn = approval_fn
+
+    def register_hooks(self, registry: HookRegistry) -> None:
+        registry.add_callback(BeforeToolCallEvent, self._check_send)
+
+    def _check_send(self, event: BeforeToolCallEvent) -> None:
+        if event.tool_use["name"] not in SEND_TOOLS:
+            return
+        approved = self._approval_fn(
+            event.tool_use["name"],
+            event.tool_use.get("input", {}),
+        )
+        if not approved:
+            event.cancel_tool = "Human rejected the send. Revise the message and try again."

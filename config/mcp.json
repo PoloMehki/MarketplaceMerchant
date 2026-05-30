@@ -5,7 +5,7 @@
       "args": [
         "@playwright/mcp@latest",
         "--user-data-dir",
-        "C:/Users/mehki/workplace/MarketplaceMerchant/.fb-profile"
+        "/Users/arturolopez/personal_projects/MarketplaceMerchant/.fb-profile"
       ]
     }
   }

@@ -1,11 +1,13 @@
-"""Task 6.1: test_prompt_contains_rails, test_validate_offer_rejects_above_walkaway.
+"""Tasks 6.1 + 6.3: prompt rails, numeric guardrails, and HITL approval gate.
 
-(The 6.3 gate tests will be added with the approval_gate in the next task.)
 Inputs are duck-typed stand-ins for PriceTargets / Listing / Comp.
 """
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 from negagent.agent.rails import (
+    SEND_TOOLS,
+    HITLApprovalGate,
     Rails,
     build_rails,
     build_system_prompt,
@@ -91,3 +93,50 @@ def test_build_rails_bundles_prompt_and_guardrails():
     # default cap derived from targets (20% of 40 = 8.0)
     assert rails.max_concession_per_turn == 8.0
     assert rails.validate_concession(70, 90) is False   # +20 exceeds cap
+
+
+# --- Task 6.3: HITLApprovalGate ---
+
+def _mock_event(tool_name: str, tool_input: dict | None = None) -> MagicMock:
+    """Build a mock BeforeToolCallEvent with controlled tool_use."""
+    event = MagicMock()
+    event.tool_use = {"name": tool_name, "input": tool_input or {}}
+    event.cancel_tool = False
+    return event
+
+
+def test_gate_blocks_send_without_approval():
+    gate = HITLApprovalGate(approval_fn=lambda name, inp: False)
+    for send_tool in SEND_TOOLS:
+        event = _mock_event(send_tool, {"text": "Would you take $90?"})
+        gate._check_send(event)
+        assert event.cancel_tool != False, f"Expected cancel_tool set for {send_tool!r}"
+
+
+def test_gate_allows_read_tools():
+    # approval_fn always denies — but it must never be called for read tools
+    called = []
+    def deny_and_track(name, inp):
+        called.append(name)
+        return False
+
+    gate = HITLApprovalGate(approval_fn=deny_and_track)
+    read_tools = [
+        "browser_navigate", "browser_snapshot", "browser_take_screenshot",
+        "browser_click", "browser_wait_for", "browser_navigate_back",
+        "browser_console_messages", "browser_tabs",
+    ]
+    for tool in read_tools:
+        event = _mock_event(tool)
+        gate._check_send(event)
+        assert event.cancel_tool is False, f"cancel_tool wrongly set for read tool {tool!r}"
+
+    assert called == [], "approval_fn should never be called for read-only tools"
+
+
+def test_gate_allows_send_on_approve():
+    gate = HITLApprovalGate(approval_fn=lambda name, inp: True)
+    for send_tool in SEND_TOOLS:
+        event = _mock_event(send_tool, {"text": "Would you take $90?"})
+        gate._check_send(event)
+        assert event.cancel_tool is False, f"cancel_tool wrongly set on approval for {send_tool!r}"

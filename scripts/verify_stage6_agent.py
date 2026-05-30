@@ -25,6 +25,8 @@ To test approving a send (Task 6.3 live verify), answer 'y' at the prompt.
 import sys
 from types import SimpleNamespace
 
+from strands.hooks import BeforeToolCallEvent
+
 from negagent.agent.negotiator import (
     build_agent,
     build_bedrock_model,
@@ -47,7 +49,7 @@ def _make_deny_gate(*, approve_once: bool = False):
     """
     approved = {"count": 0}
 
-    def gate(event):
+    def gate(event: BeforeToolCallEvent) -> None:
         if event.tool_use["name"] not in _SEND_TOOLS:
             return  # read-only tools pass through ungated
         print(f"\n[GATE] Agent wants to call: {event.tool_use['name']}")
@@ -101,17 +103,23 @@ def main(argv: list[str]) -> int:
     gate = _make_deny_gate(approve_once=False)
 
     print("\nOpening Playwright MCP browser (may take a few seconds)...")
-    with mcp_client:
-        agent = build_agent(bedrock_model, rails, mcp_client, hooks=[gate])
+    # Note: do NOT use 'with mcp_client:' before build_agent. In strands v1.41
+    # __enter__ calls start() but does not set _tool_provider_started, so Agent's
+    # process_tools -> load_tools would try start() again and fail. Instead let
+    # Agent's constructor trigger load_tools -> start() and clean up via stop().
+    agent = build_agent(bedrock_model, rails, mcp_client, hooks=[gate])
 
-        instruction = (
-            f"Go to the Messenger thread at {thread_url}. "
-            "Read the conversation history. "
-            "Then draft an opening offer message for me to review -- do NOT send yet."
-        )
-        print(f"\nRunning agent with instruction:\n  {instruction}\n")
+    instruction = (
+        f"Go to the Messenger thread at {thread_url}. "
+        "Read the conversation history. "
+        "Then draft an opening offer message for me to review -- do NOT send yet."
+    )
+    print(f"\nRunning agent with instruction:\n  {instruction}\n")
+    try:
         result = agent(instruction)
         print(f"\nAgent result:\n{result}")
+    finally:
+        mcp_client.stop(None, None, None)
 
     return 0
 
