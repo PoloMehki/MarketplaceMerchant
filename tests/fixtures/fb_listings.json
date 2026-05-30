@@ -1,0 +1,38 @@
+[
+  {
+    "id": "fb123",
+    "title": "iPhone 13 128GB - Good Condition",
+    "price": 350,
+    "currency": "USD",
+    "condition": "Good",
+    "description": "Lightly used iPhone 13, 128GB, unlocked. Minor scratches on back.",
+    "location": "Seattle, WA",
+    "sellerName": "Jane D.",
+    "url": "https://www.facebook.com/marketplace/item/123456789",
+    "images": ["https://img.facebook.com/1.jpg", "https://img.facebook.com/2.jpg"]
+  },
+  {
+    "id": "fb124",
+    "title": "iPhone 13 256GB - Excellent",
+    "price": 420,
+    "currency": "USD",
+    "condition": "Used - Like New",
+    "description": "Barely used, 256GB. Comes with original box.",
+    "location": "Seattle, WA",
+    "sellerName": "Bob K.",
+    "url": "https://www.facebook.com/marketplace/item/987654321",
+    "images": ["https://img.facebook.com/3.jpg"]
+  },
+  {
+    "id": "fb125",
+    "title": "iPhone 13 - For Parts",
+    "price": 80,
+    "currency": "USD",
+    "condition": "For parts or not working",
+    "description": "Cracked screen, for parts only.",
+    "location": "Seattle, WA",
+    "sellerName": "Mike T.",
+    "url": "https://www.facebook.com/marketplace/item/111222333",
+    "images": []
+  }
+]

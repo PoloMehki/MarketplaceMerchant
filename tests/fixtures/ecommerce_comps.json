@@ -1,0 +1,23 @@
+[
+  {
+    "source": "amazon",
+    "title": "Apple iPhone 13 128GB (Renewed)",
+    "price": 429.99,
+    "condition": "renewed",
+    "url": "https://www.amazon.com/dp/B09LNW3CY2"
+  },
+  {
+    "source": "ebay",
+    "title": "iPhone 13 128GB Unlocked - Good",
+    "price": 389.0,
+    "condition": "used - good",
+    "url": "https://www.ebay.com/itm/123456"
+  },
+  {
+    "source": "bestbuy",
+    "title": "Apple - Pre-Owned iPhone 13 128GB",
+    "price": 459.99,
+    "condition": "excellent",
+    "url": "https://www.bestbuy.com/site/123"
+  }
+]
