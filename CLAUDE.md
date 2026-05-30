@@ -15,11 +15,9 @@ Marketplace**, grounds a "fair price" in active **e-commerce comps**, and runs a
 agent** that actuates Messenger through **Playwright MCP**. CascadiaJS hackathon
 project by Arturo (Dev A) and Mehki (Dev B).
 
-**Source-of-truth spec** (shared out-of-band — these live outside the repo, so they
-won't resolve from a fresh clone; get them from your teammate):
-- `~/Downloads/negotiation-agent-spec.md` — full build spec, the authority on every task ID.
-- `~/Downloads/dev-a-data-and-pricing.md` — Dev A lane.
-- `~/Downloads/dev-b-agent-and-negotiation.md` — Dev B lane.
+**Source-of-truth spec:**
+- `negotiation-agent-spec.md` — full build spec, the authority on every task ID (in repo).
+- The agent will receive either **A (Data & Pricing)** or **B (Agent & Negotiation)** before implementing.
 
 ### Stack
 - **Python 3.11+**, package manager `uv` (or `pip`) + `venv`.
