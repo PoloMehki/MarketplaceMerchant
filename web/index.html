@@ -409,30 +409,18 @@
       Target item
       <span class="tag">demo.json</span>
     </div>
-    <div class="target-grid">
+    <div class="target-grid" id="specGrid">
       <div class="target-cell">
-        <label>Item</label>
-        <div class="val">MacBook Pro 14"</div>
-      </div>
-      <div class="target-cell">
-        <label>Specs</label>
-        <div class="val">M4 · 32GB · 1TB</div>
-      </div>
-      <div class="target-cell">
-        <label>Location</label>
-        <div class="val">Seattle, WA</div>
-      </div>
-      <div class="target-cell">
-        <label>Listed at</label>
-        <div class="val listed">$1,800</div>
+        <label>Query</label>
+        <div class="val" id="specQuery">loading…</div>
       </div>
       <div class="target-cell">
         <label>Strategy</label>
-        <div class="val">15% below median</div>
+        <div class="val" id="specStrategy">—</div>
       </div>
       <div class="target-cell">
-        <label>Walk-away</label>
-        <div class="val ceil">$1,600</div>
+        <label>Category</label>
+        <div class="val" id="specCategory">—</div>
       </div>
     </div>
   </div>
@@ -479,42 +467,48 @@
 </div>
 
 <script>
-  // ── sequence definition ──────────────────────────────────────────────────
-  // Each entry: { d: delay_ms_after_prev, type: css-class, p: prefix, t: text }
+  // ── Load spec from demo.json via server ──────────────────────────────────
+  async function loadSpec() {
+    try {
+      const r = await fetch('/api/spec');
+      const s = await r.json();
+      document.getElementById('specQuery').textContent = s.query || '—';
+      document.getElementById('specCategory').textContent = s.category || '—';
+      const pct = Math.round((s.threshold_value || 0) * 100);
+      const modeLabel = s.price_mode === 'below_median_pct' ? 'below median'
+                      : s.price_mode === 'below_avg_pct'    ? 'below average'
+                      : s.price_mode || '—';
+      document.getElementById('specStrategy').textContent =
+        s.price_mode === 'budget' ? `Budget: $${s.threshold_value}` : `${pct}% ${modeLabel}`;
+    } catch(e) {
+      document.getElementById('specQuery').textContent = 'server not running';
+    }
+  }
+  loadSpec();
 
-  const SEQ = [
-    { d:  400, type:'t-step', p:'01',  t:'<span class="spin">◌</span> Searching Facebook Marketplace...' },
-    { d: 1900, type:'t-found',p:'▸',   t:'FOUND &nbsp; MacBook Pro 14" M4 32GB/1TB · <span style="color:var(--red)">$1,800</span> · "Used - Like New"' },
-    { d:  200, type:'t-sub',  p:'',    t:'&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Seller: Mehki Polo · Seattle, WA · item/1442945257599192' },
-
-    { d:  700, type:'t-step', p:'02',  t:'<span class="spin">◌</span> Scraping eBay for comparable listings...' },
-    { d: 2100, type:'t-found',p:'▸',   t:'FOUND &nbsp; 82 results · 3 in sane price range ($900–$7,200)' },
-    { d:  300, type:'t-sub',  p:'  ↳', t:'<span style="color:var(--green)">$1,600</span> &nbsp;2024 Apple MacBook Pro 14" M4 10C GPU 4.5GHz 32GB RAM 1TB' },
-    { d:  250, type:'t-sub',  p:'  ↳', t:'<span style="color:var(--amber)">$1,000</span> &nbsp;2021 Apple MacBook Pro 14" M1 Max 24C GPU 3.2GHz 32GB RAM 1T' },
-    { d:  250, type:'t-sub',  p:'  ↳', t:'<span style="color:var(--amber)">$2,200</span> &nbsp;Apple MacBook Pro 14" M4 32GB RAM 1TB SSD Gray 10-Core GPU' },
-
-    { d:  700, type:'t-step', p:'03',  t:'<span class="spin">◌</span> Assessing listing condition via vision AI...' },
-    { d: 1700, type:'t-flag', p:'⚑',   t:'FLAG &nbsp; Stated "Like New" → Assessed "Good" · dust + fingerprints visible · continued' },
-
-    { d:  600, type:'t-step', p:'04',  t:'<span class="spin">◌</span> Computing price targets from comps...' },
-    { d: 1300, type:'t-found',p:'▸',   t:'PRICES &nbsp;Anchor <b>$1,224</b> &nbsp;·&nbsp; Target <b>$1,360</b> &nbsp;·&nbsp; Walk-away <b>$1,600</b>' },
-
-    { d:  800, type:'t-gate', p:'⊕',   t:'GATE &nbsp; Human approval required before Messenger send' },
-    { d: 1600, type:'t-ok',   p:'✓',   t:'APPROVED &nbsp; Proceeding with opening offer' },
-
-    { d:  400, type:'t-sent', p:'→',   t:'SENT &nbsp; <i>"Hi! I\'m interested in your MacBook Pro 14" M4 32GB/1TB. Would you accept $1,224?"</i>' },
-
-    { d:  800, type:'t-step', p:'05',  t:'Waiting for seller reply<span class="dot"></span>' },
-    { d: 3600, type:'t-recv', p:'←',   t:'RECEIVED &nbsp; Mehki: <i>"Sorry, the lowest I\'ll go is $1,600"</i>' },
-
-    { d:  600, type:'t-bad',  p:'✕',   t:'DECISION &nbsp; $1,600 ≥ walk-away ceiling → WALK AWAY' },
-    { d:  700, type:'t-sent', p:'→',   t:'SENT &nbsp; <i>"Thanks for your time, but that price doesn\'t work for me. Good luck!"</i>' },
-
-    { d: 1000, type:'t-done', p:'■',   t:'COMPLETE &nbsp; Status: WALKED &nbsp;·&nbsp; Best price found: $1,600' },
-  ];
+  // ── Classify a CLI output line into a log-entry type ────────────────────
+  function classify(line) {
+    const t = line.trim();
+    if (t.startsWith('[GATE]'))                          return { p: '⊕', type: 't-gate' };
+    if (t.startsWith('[HITL]'))                          return { p: '?',  type: 't-flag' };
+    if (t.startsWith('[FLAG]') || t.includes('[FLAG]'))  return { p: '⚑',  type: 't-flag' };
+    if (/^\[GATE\] Approve/.test(t))                     return { p: '⊕',  type: 't-gate' };
+    if (/^APPROVED/i.test(t))                            return { p: '✓',  type: 't-ok'   };
+    if (/^\[REPLY LOOP\]/.test(t))                       return { p: '↻',  type: 't-step' };
+    if (/^SENT/i.test(t))                                return { p: '→',  type: 't-sent' };
+    if (/^RECEIVED/i.test(t))                            return { p: '←',  type: 't-recv' };
+    if (/^={10,}/.test(t) || /^Negotiation complete/i.test(t)) return { p: '■', type: 't-done' };
+    if (/^\[DECISION\]|^DECISION/i.test(t))              return { p: '✕',  type: 't-bad'  };
+    if (/^\[1\//.test(t) || /^\[2\//.test(t) || /^\[3\//.test(t) ||
+        /^\[4\//.test(t) || /^\[5\//.test(t))            return { p: t.match(/\[(\d)/)?.[1] || '·', type: 't-step' };
+    if (/^\s*→/.test(line))                              return { p: '▸',  type: 't-found'};
+    if (/^\s+\d+ comps/.test(t) || /PRICES/i.test(t) || /Good price|Anchor|Target|Walk-away/.test(t)) return { p: '▸', type: 't-found' };
+    if (/Turn \d+/.test(t))                              return { p: '↻',  type: 't-step' };
+    return { p: '·', type: 't-sub' };
+  }
 
   let running = false;
-  let timers  = [];
+  let evtSource = null;
 
   function runDemo() {
     if (running) return;
@@ -526,35 +520,49 @@
 
     const log = document.getElementById('pipelineLog');
     log.innerHTML = '';
+    document.getElementById('resultCard').classList.remove('show');
 
-    const rc = document.getElementById('resultCard');
-    rc.classList.remove('show');
+    let lastStatus = '—', lastBest = '—';
 
-    let cum = 0;
+    evtSource = new EventSource('/api/run');
+    evtSource.onmessage = (e) => {
+      const msg = JSON.parse(e.data);
+      if (msg.done) {
+        evtSource.close();
+        const now = new Date();
+        document.getElementById('resultTs').textContent =
+          now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        document.getElementById('rvStatus').textContent = lastStatus;
+        document.getElementById('rvBest').textContent = lastBest;
+        document.getElementById('resultCard').classList.add('show');
+        btn.disabled = false;
+        btn.innerHTML = '<span class="btn-icon">↺</span> Run Again';
+        running = false;
+        return;
+      }
+      const line = msg.line || '';
+      if (!line.trim()) return;
 
-    SEQ.forEach((step, i) => {
-      cum += step.d;
-      const t = setTimeout(() => addEntry(log, step), cum);
-      timers.push(t);
-    });
+      // Extract result values from key lines
+      const statusM = line.match(/Status:\s*(accepted|walked|active|needs_human)/i);
+      if (statusM) lastStatus = statusM[1].toUpperCase();
+      const bestM = line.match(/Best price[:\s]+\$?([\d,]+)/i);
+      if (bestM) lastBest = '$' + bestM[1];
 
-    // reveal result
-    const finalT = setTimeout(() => {
-      const now = new Date();
-      document.getElementById('resultTs').textContent =
-        now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      document.getElementById('rvStatus').textContent = 'WALKED';
-      document.getElementById('rvStatus').className = 'rv walked';
-      document.getElementById('rvBest').textContent = '$1,600';
-
-      rc.classList.add('show');
-
-      btn.disabled  = false;
+      const { p, type } = classify(line);
+      addEntry(log, { p, type, t: escHtml(line) });
+    };
+    evtSource.onerror = () => {
+      evtSource.close();
+      addEntry(log, { p: '✕', type: 't-bad', t: 'Connection lost or server error.' });
+      btn.disabled = false;
       btn.innerHTML = '<span class="btn-icon">↺</span> Run Again';
       running = false;
-    }, cum + 800);
+    };
+  }
 
-    timers.push(finalT);
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
   function addEntry(log, step) {
@@ -562,10 +570,7 @@
     el.className = `log-entry ${step.type}`;
     el.innerHTML = `<span class="log-pfx">${step.p}</span><span class="log-txt">${step.t}</span>`;
     log.appendChild(el);
-
-    // double-rAF trick to trigger CSS transition
     requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('show')));
-
     el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 </script>

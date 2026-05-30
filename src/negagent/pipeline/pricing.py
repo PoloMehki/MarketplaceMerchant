@@ -25,10 +25,15 @@ def compute_targets(
 ) -> PriceTargets:
     """Derive the four negotiation numbers from active comp prices."""
     if not comps:
-        raise ValueError("Cannot compute price targets: no comps passed confidence threshold.")
-    prices = [c.price for c in comps]
-    median = statistics.median(prices)
-    mean = statistics.mean(prices)
+        if not listing_price:
+            raise ValueError("Cannot compute price targets: no comps and no listing price.")
+        # No comps — price purely off the listing ask with conservative discounts
+        median = listing_price
+        mean = listing_price
+    else:
+        prices = [c.price for c in comps]
+        median = statistics.median(prices)
+        mean = statistics.mean(prices)
 
     # good_price: always below the active median (skew rule)
     good_price = median * (1 - _SKEW_DISCOUNT)

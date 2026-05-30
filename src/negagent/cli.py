@@ -18,9 +18,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import sys
 import time
 from pathlib import Path
+
+logging.disable(logging.CRITICAL)
+logging.getLogger("apify_client").setLevel(logging.DEBUG)
+logging.getLogger("apify_client").disabled = False
 from typing import Any, Callable, Optional
 
 from negagent.agent.negotiator import (
@@ -247,7 +252,7 @@ def run_pipeline(
         mcp_client = build_mcp_client(user_data_dir)
 
     bedrock_model = build_bedrock_model(cfg)
-    agent = build_agent(bedrock_model, rails, mcp_client, hooks=[gate])
+    agent = build_agent(bedrock_model, rails, mcp_client, hooks=[gate], callback_handler=None)
 
     # instruction = (
     #     f"Navigate to the Facebook Marketplace listing at {listing.url}. "

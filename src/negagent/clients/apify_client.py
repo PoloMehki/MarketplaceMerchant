@@ -18,7 +18,7 @@ ECOMMERCE_FIXTURE = "ecommerce_comps.json"
 FB_FIXTURE = "fb_listings.json"
 
 _DEFAULT_MARKETPLACES = ["www.ebay.com"]
-_DEFAULT_MAX_PRODUCTS = 7
+_DEFAULT_MAX_PRODUCTS = 25
 _DEFAULT_FB_RESULTS = 5
 
 
