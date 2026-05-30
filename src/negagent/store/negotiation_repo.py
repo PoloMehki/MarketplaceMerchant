@@ -113,6 +113,17 @@ class NegotiationRepo:
         self._conn.commit()
         return self._require(listing_id)
 
+    def reset(self, listing_id: str) -> dict:
+        """Wipe turns and reset state for a re-run on the same listing."""
+        self._require(listing_id)
+        self._conn.execute(
+            "UPDATE negotiations SET status='active', current_offer=NULL, "
+            "best_price_found=NULL, turns='[]' WHERE listing_id=?",
+            (listing_id,),
+        )
+        self._conn.commit()
+        return self._require(listing_id)
+
     def set_best_price(self, listing_id: str, price: float) -> dict:
         """Record ``price`` as best_price_found only if it is a new minimum."""
         record = self._require(listing_id)

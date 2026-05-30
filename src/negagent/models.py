@@ -24,6 +24,7 @@ class TargetSpec(BaseModel):
     price_mode: PriceMode
     threshold_value: float
     time_window_minutes: int
+    listing_url: Optional[str] = None
 
 
 class Comp(BaseModel):

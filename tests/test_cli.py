@@ -112,7 +112,8 @@ def repo():
 # ── tests ────────────────────────────────────────────────────────────────────
 
 def test_cli_happy_path_end_to_end(repo):
-    mock_agent = MagicMock(return_value="negotiation done")
+    # poll calls return None (no seller reply) so loop exits after 1 turn
+    mock_agent = MagicMock(return_value="NO_REPLY")
     mock_mcp = _mock_mcp()
     mock_box = MagicMock()
     mock_query = SimpleNamespace(search_query="Herman Miller Aeron")
@@ -123,7 +124,10 @@ def test_cli_happy_path_end_to_end(repo):
          patch("negagent.cli.assess_condition", return_value=_assessment()), \
          patch("negagent.cli.compute_targets", return_value=_targets()), \
          patch("negagent.cli.build_bedrock_model", return_value=MagicMock()), \
-         patch("negagent.cli.build_agent", return_value=mock_agent):
+         patch("negagent.cli.build_agent", return_value=mock_agent), \
+         patch("negagent.cli.time") as mock_time:
+
+        mock_time.sleep = MagicMock()  # skip real sleeps
 
         result = run_pipeline(
             _spec(), _cfg(), repo,
@@ -133,6 +137,8 @@ def test_cli_happy_path_end_to_end(repo):
             mcp_client=mock_mcp,
             approval_fn=lambda name, inp: True,
             hitl_fn=lambda prompt: True,
+            poll_interval_s=0,
+            max_turns=1,
         )
 
     # pipeline completed and wrote a negotiation record
@@ -140,8 +146,8 @@ def test_cli_happy_path_end_to_end(repo):
     assert result["listing_id"] == "fb123"
     assert result["status"] == "active"
 
-    # agent was invoked twice: once for the warmup navigate, once for the main instruction
-    assert mock_agent.call_count == 2
+    # agent calls: warmup + send + 1 reply-loop poll
+    assert mock_agent.call_count >= 3
     warmup_call = mock_agent.call_args_list[0][0][0]
     assert "facebook.com/marketplace" in warmup_call
     instruction = mock_agent.call_args_list[1][0][0]

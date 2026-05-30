@@ -89,19 +89,15 @@ def build_instruction(listing, targets) -> str:
         f"Would you accept ${targets.anchor:.0f}?"
     )
     return (
-        "The page is already loaded. Take ONE snapshot. "
-        "Look for a pre-chat textbox with aria-label 'Send seller a message' or placeholder 'Hello, is this still available?'. "
-        "If you see it: use browser_fill_form to fill it immediately with exactly: "
+        "The listing page is already loaded. Take ONE snapshot. "
+        "Find the 'Message' or 'Message again' button and click it to open the Messenger compose panel. "
+        "Wait for the message input area to appear (a text field or textarea in the compose panel). "
+        "Once visible, use browser_fill_form to fill the message input with exactly: "
         f"'{opening_message}' "
-        "Then click the 'Send message' button next to it. "
-        "If there is NO pre-chat textbox visible: click the 'Message' or 'Message again' button. "
-        "Wait for a textbox to appear, then use browser_fill_form to fill it with exactly: "
-        f"'{opening_message}' "
-        "Then click the 'Send' or 'Send message' button. "
-        "Do NOT use browser_type, browser_evaluate, or browser_run_code_unsafe. "
-        "Do NOT press Enter — always click the Send button. "
+        "Then click the 'Send' or 'Send message' button to send it. "
+        "Do NOT press Enter to submit — always click the Send button explicitly. "
         "If a login modal appears, stop and report 'login_required'. "
-        "Take ONE final snapshot to confirm the message is sent, then report 'success'. "
+        "Take ONE final snapshot to confirm the message appears in the thread, then report 'success'. "
         "If any step fails after 2 attempts, report the step name and error."
     )
 
@@ -111,6 +107,67 @@ def run_with_warmup(agent: Agent, listing_url: str, instruction: str) -> None:
     already loaded when the agent begins its real task."""
     agent(f"Navigate to {listing_url} and wait for the page to fully load. Report 'ready'.")
     agent(instruction)
+
+
+def get_seller_reply(agent: Agent) -> Optional[float]:
+    """Ask the agent to check the current thread for a new seller price.
+
+    Uses LLM interpretation (more reliable than regex for a live demo).
+    Returns the seller's offered price, or None if no new price was found.
+    """
+    response = agent(
+        "Look at the current Messenger thread carefully. "
+        "Has the seller sent a new message after the buyer's last message? "
+        "If yes and they mentioned a specific price: respond ONLY with 'SELLER_PRICE: $XXX'. "
+        "If yes but no specific price mentioned: respond ONLY with 'SELLER_MSG: <brief text>'. "
+        "If no new seller message yet: respond ONLY with 'NO_REPLY'."
+    )
+    text = str(response)
+    if "SELLER_PRICE:" in text:
+        m = re.search(r"SELLER_PRICE:\s*\$?([\d,]+(?:\.\d{1,2})?)", text)
+        if m:
+            return float(m.group(1).replace(",", ""))
+    return None
+
+
+def build_counter_instruction(next_offer: float) -> str:
+    """Build instruction to send a counter-offer on the already-open thread."""
+    msg = f"I appreciate you responding! How about ${next_offer:.0f}?"
+    return (
+        "You are already in the Messenger thread. Take ONE snapshot. "
+        "Find the message input field and use browser_fill_form to fill it with exactly: "
+        f"'{msg}' "
+        "Then click the Send button. Do NOT press Enter. "
+        "Take ONE final snapshot to confirm the message appears, then report 'success'."
+    )
+
+
+def build_accept_instruction() -> str:
+    """Build instruction to send a deal-acceptance message."""
+    msg = "Great, we have a deal! I'll reach out to arrange pickup."
+    return (
+        "You are in the Messenger thread. Take ONE snapshot. "
+        "Find the message input field and use browser_fill_form to fill it with exactly: "
+        f"'{msg}' "
+        "Then click the Send button. Report 'deal_accepted'."
+    )
+
+
+def build_walkaway_instruction() -> str:
+    """Build instruction to send a polite walkaway message."""
+    msg = "Thanks for your time, but that price doesn't work for me. Good luck with your sale!"
+    return (
+        "You are in the Messenger thread. Take ONE snapshot. "
+        "Find the message input field and use browser_fill_form to fill it with exactly: "
+        f"'{msg}' "
+        "Then click the Send button. Report 'walked_away'."
+    )
+
+
+def compute_counter_offer(seller_offer: float, rails) -> float:
+    """Midpoint between seller's last ask and our target, floored at anchor."""
+    mid = (seller_offer + float(rails.target)) / 2.0
+    return max(mid, float(rails.anchor))
 
 
 def user_data_dir_from_mcp_config(mcp_config_path: "str | Path") -> str:

@@ -5,12 +5,13 @@ Usage:
 
 demo.json (TargetSpec):
   {
-    "query": "Herman Miller Aeron Size B",
-    "category": "furniture",
+    "query": "MacBook Pro 14 M4 32GB 1TB",
+    "category": "electronics",
     "acceptable_conditions": ["good", "like new"],
     "price_mode": "below_median_pct",
     "threshold_value": 0.15,
-    "time_window_minutes": 60
+    "time_window_minutes": 60,
+    "listing_url": "https://www.facebook.com/marketplace/item/1442945257599192/"
   }
 """
 from __future__ import annotations
@@ -18,14 +19,21 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from pathlib import Path
 from typing import Any, Callable, Optional
 
 from negagent.agent.negotiator import (
+    build_accept_instruction,
     build_agent,
     build_bedrock_model,
+    build_counter_instruction,
     build_instruction,
     build_mcp_client,
+    build_walkaway_instruction,
+    compute_counter_offer,
+    decide_next_action,
+    get_seller_reply,
     run_with_warmup,
     user_data_dir_from_mcp_config,
 )
@@ -74,6 +82,8 @@ def run_pipeline(
     approval_fn: Optional[Callable] = None,
     hitl_fn: Optional[Callable] = None,
     location: str = "seattle",
+    poll_interval_s: float = 30.0,
+    max_turns: int = 8,
 ) -> Optional[dict]:
     """Core pipeline: listing → comps → pricing → negotiate → archive.
 
@@ -117,7 +127,20 @@ def run_pipeline(
     if not listings:
         print("      No listings found.")
         return None
-    listing = listings[0]
+
+    if spec.listing_url:
+        # Strip tracking params so URL comparison is stable
+        target_url = spec.listing_url.split("?")[0].rstrip("/")
+        matched = [l for l in listings if l.url.split("?")[0].rstrip("/") == target_url]
+        if not matched:
+            print(f"      ERROR: pinned listing URL not found in Apify results.")
+            print(f"        Wanted: {spec.listing_url}")
+            print(f"        Got:    {[l.url for l in listings]}")
+            return None
+        listing = matched[0]
+    else:
+        listing = listings[0]
+
     print(f"      → {listing.title!r}  ${listing.price:.0f}  [{listing.stated_condition}]")
     print(f"        {listing.url}")
 
@@ -211,6 +234,7 @@ def run_pipeline(
     try:
         repo.create(listing_id, status="active", current_offer=listing.price)
     except ValueError:
+        repo.reset(listing_id)
         repo.update_state(listing_id, "active", current_offer=listing.price)
 
     # ── 5. Negotiate ────────────────────────────────────────────────────────
@@ -257,6 +281,55 @@ def run_pipeline(
 
     try:
         run_with_warmup(agent, listing.url, instruction)
+        repo.append_turn(listing_id, "buyer", targets.anchor, f"Opening offer: ${targets.anchor:.0f}")
+
+        # ── 5b. Reply loop ──────────────────────────────────────────────────
+        print(f"\n[REPLY LOOP] Polling every {poll_interval_s:.0f}s for seller reply (max {max_turns} turns)...")
+        seen_prices: set[float] = {targets.anchor}  # don't re-act on our own price
+        final_action = None
+
+        for turn_num in range(1, max_turns + 1):
+            print(f"  Turn {turn_num}/{max_turns}: waiting {poll_interval_s:.0f}s...", flush=True)
+            time.sleep(poll_interval_s)
+
+            seller_offer = get_seller_reply(agent)
+
+            if seller_offer is None or seller_offer in seen_prices:
+                print("  No new seller price yet. Continuing to poll...")
+                continue
+
+            seen_prices.add(seller_offer)
+            print(f"  Seller offer: ${seller_offer:.0f}", flush=True)
+
+            repo.append_turn(listing_id, "seller", seller_offer, f"Seller: ${seller_offer:.0f}")
+            repo.set_best_price(listing_id, seller_offer)
+
+            action = decide_next_action(seller_offer, rails)
+            print(f"  Decision: {action}", flush=True)
+
+            if action == "accept":
+                agent(build_accept_instruction())
+                repo.update_state(listing_id, "accepted", current_offer=seller_offer)
+                print("  Deal accepted!")
+                final_action = "accept"
+                break
+            elif action == "walkaway":
+                agent(build_walkaway_instruction())
+                repo.update_state(listing_id, "walked")
+                print("  Walked away.")
+                final_action = "walkaway"
+                break
+            else:  # counter
+                next_offer = compute_counter_offer(seller_offer, rails)
+                print(f"  Countering at ${next_offer:.0f}...")
+                agent(build_counter_instruction(next_offer))
+                repo.append_turn(listing_id, "buyer", next_offer, f"Counter: ${next_offer:.0f}")
+                repo.update_state(listing_id, "active", current_offer=next_offer)
+                seen_prices.add(next_offer)
+
+        if final_action is None:
+            print(f"  Max turns reached without resolution.")
+
     finally:
         mcp_client.stop(None, None, None)
 
@@ -300,6 +373,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     parser.add_argument("--spec", required=True, help="Path to TargetSpec JSON file.")
     parser.add_argument("--location", default="seattle", help="FB Marketplace location.")
+    parser.add_argument("--poll-interval", type=float, default=30.0,
+                        help="Seconds between seller-reply polls (default 30).")
+    parser.add_argument("--max-turns", type=int, default=8,
+                        help="Max negotiation turns before walking away (default 8).")
     args = parser.parse_args(argv)
 
     try:
@@ -316,7 +393,12 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     repo = NegotiationRepo.open(cfg.sqlite_path)
     try:
-        result = run_pipeline(spec, cfg, repo, location=args.location)
+        result = run_pipeline(
+            spec, cfg, repo,
+            location=args.location,
+            poll_interval_s=args.poll_interval,
+            max_turns=args.max_turns,
+        )
         return 0 if result is not None else 1
     finally:
         repo.close()
