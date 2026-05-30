@@ -2,7 +2,11 @@
   "mcpServers": {
     "playwright": {
       "command": "npx",
-      "args": ["@playwright/mcp@latest", "--user-data-dir", "/ABS/PATH/.fb-profile"]
+      "args": [
+        "@playwright/mcp@latest",
+        "--user-data-dir",
+        "C:/Users/mehki/workplace/MarketplaceMerchant/.fb-profile"
+      ]
     }
   }
 }
