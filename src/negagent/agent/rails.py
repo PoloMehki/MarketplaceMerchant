@@ -25,7 +25,10 @@ from strands.hooks import BeforeToolCallEvent, HookProvider, HookRegistry
 # Playwright tool names that write content to the page (message composer).
 # Navigate / snapshot / screenshot are reads and are never intercepted.
 SEND_TOOLS: frozenset[str] = frozenset(
-    {"browser_click", "browser_fill_form", "browser_press_key"}
+    {
+        "browser_fill_form",
+        "browser_press_key",
+    }
 )
 
 # How many comparable listings to cite in the prompt (keep it tight).

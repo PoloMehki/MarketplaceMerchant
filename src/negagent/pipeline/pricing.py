@@ -8,6 +8,7 @@ Ordering invariant enforced: anchor <= target <= walkaway.
 from __future__ import annotations
 
 import statistics
+from typing import Optional
 
 from negagent.models import Comp, PriceTargets, TargetSpec
 
@@ -15,9 +16,13 @@ from negagent.models import Comp, PriceTargets, TargetSpec
 _ANCHOR_DISCOUNT = 0.10
 # good_price sits this fraction below the median/mean regardless of mode
 _SKEW_DISCOUNT = 0.05
+# anchor must be at least this far below the listing price when comps skew high
+_MIN_LISTING_DISCOUNT = 0.20
 
 
-def compute_targets(comps: list[Comp], spec: TargetSpec) -> PriceTargets:
+def compute_targets(
+    comps: list[Comp], spec: TargetSpec, listing_price: Optional[float] = None
+) -> PriceTargets:
     """Derive the four negotiation numbers from active comp prices."""
     if not comps:
         raise ValueError("Cannot compute price targets: no comps passed confidence threshold.")
@@ -41,6 +46,12 @@ def compute_targets(comps: list[Comp], spec: TargetSpec) -> PriceTargets:
         raise ValueError(f"Unknown price_mode: {spec.price_mode!r}")
 
     anchor = target * (1 - _ANCHOR_DISCOUNT)
+
+    # when eBay comps skew high vs the FB listing, the comps-based anchor can
+    # land too close to the asking price — floor it at a real discount off the
+    # listing price so the opening offer is always meaningfully aggressive
+    if listing_price is not None and listing_price > 0:
+        anchor = min(anchor, listing_price * (1 - _MIN_LISTING_DISCOUNT))
 
     # enforce ordering invariants
     anchor = min(anchor, target)

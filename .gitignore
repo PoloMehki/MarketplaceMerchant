@@ -9,6 +9,7 @@ venv/
 # Secrets / local state (Stage 0)
 .env
 .fb-profile/
+box_config.json
 *.db
 *.sqlite
 *.sqlite3
@@ -16,3 +17,6 @@ venv/
 # IDE
 .idea/
 .vscode/
+
+# Logs
+.playwright-mcp/

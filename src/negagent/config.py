@@ -62,6 +62,8 @@ class AppConfig(BaseModel):
     box_client_secret: str
     box_enterprise_id: Optional[str] = None
     box_root_folder_id: str = "0"
+    box_jwt_config_path: Optional[Path] = None
+    box_developer_token: Optional[str] = None
 
     # --- Runtime (optional, defaulted) ---
     mcp_config_path: Path = Field(default=Path("config/mcp.json"))
@@ -148,6 +150,10 @@ def load_config(
         box_client_secret=os.environ["BOX_CLIENT_SECRET"],
         box_enterprise_id=os.environ.get("BOX_ENTERPRISE_ID") or None,
         box_root_folder_id=_get_str("BOX_ROOT_FOLDER_ID", "0"),
+        box_jwt_config_path=(
+            Path(p) if (p := os.environ.get("BOX_JWT_CONFIG_PATH", "").strip()) else None
+        ),
+        box_developer_token=os.environ.get("BOX_DEVELOPER_TOKEN") or None,
         mcp_config_path=Path(_get_str("MCP_CONFIG_PATH", "config/mcp.json")),
         sqlite_path=Path(_get_str("SQLITE_PATH", "negagent.db")),
         hitl_enabled=_get_bool("HITL_ENABLED", True),

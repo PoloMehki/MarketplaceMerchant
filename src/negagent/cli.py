@@ -24,7 +24,9 @@ from typing import Any, Callable, Optional
 from negagent.agent.negotiator import (
     build_agent,
     build_bedrock_model,
+    build_instruction,
     build_mcp_client,
+    run_with_warmup,
     user_data_dir_from_mcp_config,
 )
 from negagent.agent.rails import HITLApprovalGate, build_rails
@@ -43,13 +45,21 @@ from negagent.store.negotiation_repo import NegotiationRepo
 def _terminal_approval(tool_name: str, tool_input: dict) -> bool:
     """HITL send-gate rendered in the terminal."""
     detail = tool_input.get("element", tool_input.get("ref", str(tool_input)))
-    print(f"\n[GATE] Agent wants to click: {detail}")
-    return input("[GATE] Approve send? [y/N]: ").strip().lower() == "y"
+    print(f"\n[GATE] Agent wants to call {tool_name}: {detail}", flush=True)
+    try:
+        return input("[GATE] Approve send? [y/N]: ").strip().lower() == "y"
+    except EOFError:
+        print("[GATE] Non-interactive: auto-approving send.", flush=True)
+        return True
 
 
 def _terminal_hitl(prompt: str) -> bool:
     """Generic yes/no HITL prompt for pipeline flags."""
-    return input(f"\n[HITL] {prompt} [y/N]: ").strip().lower() == "y"
+    try:
+        return input(f"\n[HITL] {prompt} [y/N]: ").strip().lower() == "y"
+    except EOFError:
+        print(f"\n[HITL] Non-interactive: auto-approving '{prompt}'", flush=True)
+        return True
 
 
 def run_pipeline(
@@ -93,6 +103,8 @@ def run_pipeline(
             root_folder_id=cfg.box_root_folder_id,
             client_id=cfg.box_client_id,
             client_secret=cfg.box_client_secret,
+            jwt_config_path=cfg.box_jwt_config_path,
+            developer_token=cfg.box_developer_token,
         )
     if approval_fn is None:
         approval_fn = _terminal_approval
@@ -147,6 +159,16 @@ def run_pipeline(
         if _extract_comp_price(c) > 0
     ]
 
+    # Sanity filter: reject comps priced implausibly far from the listing.
+    # Catches parts/accessories that share keywords but aren't the item itself.
+    if listing.price > 0:
+        _min_sane = listing.price * 0.50
+        _max_sane = listing.price * 4.0
+        comps_unscored = [c for c in comps_unscored if _min_sane <= c.price <= _max_sane]
+        print(f"      {len(comps_unscored)} comps in sane price range (${_min_sane:.0f}–${_max_sane:.0f}).")
+        for c in comps_unscored:
+            print(f"        [comp] ${c.price:.0f}  {c.title[:60]}")
+
     try:
         comps = score_comps(
             listing, comps_unscored, bedrock_client,
@@ -177,7 +199,7 @@ def run_pipeline(
 
     # ── 4. Price targets ────────────────────────────────────────────────────
     print(f"\n[4/5] Computing price targets...")
-    targets = compute_targets(comps, spec)
+    targets = compute_targets(comps, spec, listing_price=listing.price)
     print(f"      Good price: ${targets.good_price:.0f}")
     print(
         f"      Anchor: ${targets.anchor:.0f}  →  "
@@ -186,7 +208,10 @@ def run_pipeline(
     )
 
     listing_id = listing.fb_id or listing.url
-    repo.create(listing_id, status="active", current_offer=listing.price)
+    try:
+        repo.create(listing_id, status="active", current_offer=listing.price)
+    except ValueError:
+        repo.update_state(listing_id, "active", current_offer=listing.price)
 
     # ── 5. Negotiate ────────────────────────────────────────────────────────
     print(f"\n[5/5] Starting negotiation agent (listing_id={listing_id!r})...")
@@ -209,27 +234,29 @@ def run_pipeline(
     #     "Then click 'Send message' to send it. "
     #     "Follow your rails exactly — never reveal your ceiling or internal targets."
     # )
-    opening_message = (
-        f"Hi! I'm interested in your {listing.title}. "
-        f"Would you accept ${targets.anchor:.0f}?"
-    )
-    instruction = (
-        f"Go to {listing.url}. "
-        f"Wait for the page to fully load. "
-        "Find and click the 'Message' button or 'Chat with seller' button on the listing. "
-        "If a login modal appears, stop and report 'login_required'. "
-        "If a chat panel opens in the same page, use it. "
-        "If a new tab or window opens, switch to it. "
-        "Wait until a message input field is visible and interactable. "
-        f"Type exactly this message into the input field: '{opening_message}' "
-        "Do not modify the message. "
-        "Click the 'Send' or 'Send message' button to submit it. "
-        "Confirm the message appears in the chat thread, then report 'success'. "
-        "If any step fails, report the step name and the error."
-    )
+    # opening_message = (
+    #     f"Hi! I'm interested in your {listing.title}. "
+    #     f"Would you accept ${targets.anchor:.0f}?"
+    # )
+    # instruction = (
+    #     f"Go to {listing.url}. "
+    #     f"Wait for the page to fully load. "
+    #     "Find and click the 'Message' button or 'Chat with seller' button on the listing. "
+    #     "If a login modal appears, stop and report 'login_required'. "
+    #     "If a chat panel opens in the same page, use it. "
+    #     "If a new tab or window opens, switch to it. "
+    #     "Wait until a message input field is visible and interactable. "
+    #     f"Type exactly this message into the input field: '{opening_message}' "
+    #     "Do not modify the message. "
+    #     "Click the 'Send' or 'Send message' button to submit it. "
+    #     "Confirm the message appears in the chat thread, then report 'success'. "
+    #     "If any step fails, report the step name and the error."
+    # )
+
+    instruction = build_instruction(listing, targets)
 
     try:
-        agent(instruction)
+        run_with_warmup(agent, listing.url, instruction)
     finally:
         mcp_client.stop(None, None, None)
 
@@ -260,7 +287,8 @@ def run_pipeline(
             best_price_found=best,
             turns=turns,
         )
-        box_client.archive_negotiation(neg_state)
+        archived = box_client.archive_negotiation(neg_state)
+        print("  Box:        archived" if archived else "  Box:        skipped (see above)")
 
     return state_dict
 

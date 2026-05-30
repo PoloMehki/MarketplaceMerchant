@@ -71,3 +71,19 @@ def test_anchor_below_target():
     """anchor opens below target to leave negotiating room."""
     result = compute_targets(COMPS, BASE_SPEC)
     assert result.anchor < result.target
+
+
+def test_listing_price_floor_applied_when_comps_skew_high():
+    """When eBay comps are higher than the listing price, anchor must still be
+    at least 20% below the listing price — not just 10% below the comps-based target."""
+    # comps median ~$539 → comps-based anchor ~$412, but listing is $420
+    # without the floor: anchor=$412, only $8 below listing
+    # with the floor: anchor = min($412, $420*0.80) = min($412, $336) = $336
+    high_comps = [
+        Comp(source="ebay", title="Aeron", price=p, condition="used", url="u")
+        for p in [500.0, 520.0, 539.0, 560.0, 580.0]
+    ]
+    spec = BASE_SPEC.model_copy(update={"price_mode": "below_median_pct", "threshold_value": 0.15})
+    listing_price = 420.0
+    result = compute_targets(high_comps, spec, listing_price=listing_price)
+    assert result.anchor <= listing_price * 0.80, "anchor should be at least 20% below listing price"

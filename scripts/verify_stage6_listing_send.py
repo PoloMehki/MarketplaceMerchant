@@ -22,13 +22,15 @@ from strands.hooks import BeforeToolCallEvent
 from negagent.agent.negotiator import (
     build_agent,
     build_bedrock_model,
+    build_instruction,
     build_mcp_client,
+    run_with_warmup,
     user_data_dir_from_mcp_config,
 )
 from negagent.agent.rails import build_rails
 from negagent.config import load_config
 
-_SEND_TOOLS = frozenset({"browser_click", "browser_fill_form", "browser_press_key"})
+_SEND_TOOLS = frozenset({"browser_fill_form", "browser_press_key"})
 
 
 def _make_terminal_gate():
@@ -82,21 +84,11 @@ def main(argv: list[str]) -> int:
     print("Opening Playwright MCP browser...")
     agent = build_agent(bedrock_model, rails, mcp_client, hooks=[gate])
 
-    instruction = (
-        f"Navigate to the Facebook Marketplace listing at {listing_url}. "
-        "Click the 'Message' button to open a chat with the seller. "
-        "A chat panel or new tab may open — follow it. "
-        "Once the message composer is visible, type this opening offer: "
-        "'Hi! I am very interested in your listing. "
-        "I found a similar item in good condition on eBay for $25. "
-        "Based on that, I would like to offer $15 — would you consider it?' "
-        "Then click 'Send message' to send it."
-    )
+    instruction = build_instruction(listing, targets)
     print(f"\nInstruction:\n  {instruction}\n")
 
     try:
-        result = agent(instruction)
-        print(f"\nAgent result:\n{result}")
+        run_with_warmup(agent, listing_url, instruction)
     finally:
         mcp_client.stop(None, None, None)
 

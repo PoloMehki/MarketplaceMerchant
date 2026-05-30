@@ -140,10 +140,13 @@ def test_cli_happy_path_end_to_end(repo):
     assert result["listing_id"] == "fb123"
     assert result["status"] == "active"
 
-    # agent was invoked with an instruction referencing the listing URL
-    mock_agent.assert_called_once()
-    instruction = mock_agent.call_args[0][0]
-    assert "facebook.com/marketplace" in instruction
+    # agent was invoked twice: once for the warmup navigate, once for the main instruction
+    assert mock_agent.call_count == 2
+    warmup_call = mock_agent.call_args_list[0][0][0]
+    assert "facebook.com/marketplace" in warmup_call
+    instruction = mock_agent.call_args_list[1][0][0]
+    assert "browser_fill_form" in instruction
+    assert "already loaded" in instruction
 
     # MCP was cleaned up
     mock_mcp.stop.assert_called_once_with(None, None, None)

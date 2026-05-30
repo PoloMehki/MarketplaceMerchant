@@ -46,12 +46,16 @@ def build_bedrock_model(config) -> BedrockModel:
     )
 
 
+_UNSET = object()
+
+
 def build_agent(
     bedrock_model,
     rails,
     mcp_client: MCPClient,
     *,
     hooks: Optional[list[Any]] = None,
+    callback_handler: Any = _UNSET,
 ) -> Agent:
     """Build the negotiation Agent wired to Bedrock + Playwright MCP + rails.
 
@@ -68,13 +72,45 @@ def build_agent(
     ``callback_handler=None`` silences the default stdout printer; the CLI
     (Task 8.1) wires its own handler.
     """
+    cb_kwargs = {} if callback_handler is _UNSET else {"callback_handler": callback_handler}
     return Agent(
         model=bedrock_model,
         system_prompt=rails.system_prompt,
         tools=[mcp_client],
         hooks=hooks or [],
-        callback_handler=None,
+        **cb_kwargs,
     )
+
+
+def build_instruction(listing, targets) -> str:
+    """Build the standard opening-send instruction for a listing negotiation."""
+    opening_message = (
+        f"Hi! I'm interested in your {listing.title}. "
+        f"Would you accept ${targets.anchor:.0f}?"
+    )
+    return (
+        "The page is already loaded. Take ONE snapshot. "
+        "Look for a pre-chat textbox with aria-label 'Send seller a message' or placeholder 'Hello, is this still available?'. "
+        "If you see it: use browser_fill_form to fill it immediately with exactly: "
+        f"'{opening_message}' "
+        "Then click the 'Send message' button next to it. "
+        "If there is NO pre-chat textbox visible: click the 'Message' or 'Message again' button. "
+        "Wait for a textbox to appear, then use browser_fill_form to fill it with exactly: "
+        f"'{opening_message}' "
+        "Then click the 'Send' or 'Send message' button. "
+        "Do NOT use browser_type, browser_evaluate, or browser_run_code_unsafe. "
+        "Do NOT press Enter — always click the Send button. "
+        "If a login modal appears, stop and report 'login_required'. "
+        "Take ONE final snapshot to confirm the message is sent, then report 'success'. "
+        "If any step fails after 2 attempts, report the step name and error."
+    )
+
+
+def run_with_warmup(agent: Agent, listing_url: str, instruction: str) -> None:
+    """Fire a navigate warm-up before the main instruction so the page is
+    already loaded when the agent begins its real task."""
+    agent(f"Navigate to {listing_url} and wait for the page to fully load. Report 'ready'.")
+    agent(instruction)
 
 
 def user_data_dir_from_mcp_config(mcp_config_path: "str | Path") -> str:
