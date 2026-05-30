@@ -38,11 +38,16 @@ class BedrockClient:
         response = self._client.converse(**kwargs)
         return self._extract_text(response)
 
-    def complete_vision(self, messages_with_images: list[dict]) -> str:
+    def complete_vision(
+        self,
+        messages_with_images: list[dict],
+        system: Optional[str] = None,
+    ) -> str:
         """Send messages containing image content blocks, return reply text."""
-        response = self._client.converse(
-            modelId=self._model_id, messages=messages_with_images
-        )
+        kwargs: dict[str, Any] = {"modelId": self._model_id, "messages": messages_with_images}
+        if system:
+            kwargs["system"] = [{"text": system}]
+        response = self._client.converse(**kwargs)
         return self._extract_text(response)
 
     @staticmethod

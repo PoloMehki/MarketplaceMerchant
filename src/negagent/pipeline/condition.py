@@ -20,12 +20,12 @@ if TYPE_CHECKING:
 
 _SYSTEM = (
     "You are a product condition evaluator. "
-    "Examine the provided listing images and description, then assess the item's "
-    "condition. Return ONLY valid JSON: "
-    "{\"assessed_condition\": <string>, \"confidence\": <0-1 float>, "
-    "\"disagrees\": <bool>, \"rationale\": <string>}. "
-    "Set disagrees=true only if the visual evidence clearly conflicts with the "
-    "seller's stated condition."
+    "Examine the provided listing images and description, then assess the item's condition. "
+    "You MUST respond with ONLY a valid JSON object — no markdown, no prose, no explanation. "
+    "Exact schema: "
+    "{\"assessed_condition\": \"good\", \"confidence\": 0.85, \"disagrees\": false, \"rationale\": \"one sentence\"} "
+    "assessed_condition must be one of: like_new, good, fair, poor. "
+    "Set disagrees=true only if visual evidence clearly conflicts with the seller's stated condition."
 )
 
 
@@ -52,13 +52,13 @@ def assess_condition(listing: Listing, bedrock: "BedrockClient") -> ConditionAss
         "text": (
             f"Seller's stated condition: {listing.stated_condition}\n"
             f"Title: {listing.title}\n"
-            f"Description: {listing.desc}\n"
-            "Assess the actual condition based on the images and description above."
+            f"Description: {listing.desc}\n\n"
+            "Assess the actual condition. Reply with ONLY the JSON object, nothing else."
         )
     })
 
     messages = [{"role": "user", "content": content}]
-    raw = bedrock.complete_vision(messages)
+    raw = bedrock.complete_vision(messages, system=_SYSTEM)
     data = _parse_json(raw)
 
     return ConditionAssessment(
