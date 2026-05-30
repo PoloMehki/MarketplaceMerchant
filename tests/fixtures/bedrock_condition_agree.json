@@ -1,0 +1,10 @@
+{
+  "output": {
+    "message": {
+      "role": "assistant",
+      "content": [{"text": "{\"assessed_condition\": \"good\", \"confidence\": 0.88, \"disagrees\": false, \"rationale\": \"Minor surface scratches consistent with 'good' condition. No cracks or major damage visible.\"}"}]
+    }
+  },
+  "stopReason": "end_turn",
+  "usage": {"inputTokens": 200, "outputTokens": 40, "totalTokens": 240}
+}

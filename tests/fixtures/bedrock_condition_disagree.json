@@ -1,0 +1,10 @@
+{
+  "output": {
+    "message": {
+      "role": "assistant",
+      "content": [{"text": "{\"assessed_condition\": \"fair\", \"confidence\": 0.82, \"disagrees\": true, \"rationale\": \"Visible cracked screen in photo 2 is inconsistent with seller's stated 'good' condition.\"}"}]
+    }
+  },
+  "stopReason": "end_turn",
+  "usage": {"inputTokens": 200, "outputTokens": 45, "totalTokens": 245}
+}
