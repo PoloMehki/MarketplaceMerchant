@@ -18,6 +18,23 @@ dependencies = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[project]
+name = "negagent"
+version = "0.1.0"
+description = "Buyer-focused human-in-the-loop Facebook Marketplace negotiation agent (CascadiaJS hackathon)."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "strands-agents",
+    "strands-agents-tools",
+    "mcp",
+    "apify-client",
+    "boxsdk",
+    "pydantic>=2",
+    "python-dotenv",
+    "pytest",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/negagent"]
 
