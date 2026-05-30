@@ -17,9 +17,9 @@ from urllib.parse import quote_plus
 ECOMMERCE_FIXTURE = "ecommerce_comps.json"
 FB_FIXTURE = "fb_listings.json"
 
-_DEFAULT_MARKETPLACES = ["www.amazon.com", "www.ebay.com", "www.bestbuy.com", "www.walmart.com", "www.target.com"]
+_DEFAULT_MARKETPLACES = ["www.ebay.com"]
 _DEFAULT_MAX_PRODUCTS = 20
-_DEFAULT_FB_RESULTS = 30
+_DEFAULT_FB_RESULTS = 5
 
 
 class ApifyActorClient:

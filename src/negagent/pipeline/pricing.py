@@ -19,6 +19,8 @@ _SKEW_DISCOUNT = 0.05
 
 def compute_targets(comps: list[Comp], spec: TargetSpec) -> PriceTargets:
     """Derive the four negotiation numbers from active comp prices."""
+    if not comps:
+        raise ValueError("Cannot compute price targets: no comps passed confidence threshold.")
     prices = [c.price for c in comps]
     median = statistics.median(prices)
     mean = statistics.mean(prices)

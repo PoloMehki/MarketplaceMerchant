@@ -42,10 +42,9 @@ from negagent.store.negotiation_repo import NegotiationRepo
 
 def _terminal_approval(tool_name: str, tool_input: dict) -> bool:
     """HITL send-gate rendered in the terminal."""
-    text = tool_input.get("text", str(tool_input))
-    print(f"\n[GATE] Agent wants to send via {tool_name}:")
-    print(f"       {text}")
-    return input("[GATE] Approve? [y/N]: ").strip().lower() == "y"
+    detail = tool_input.get("element", tool_input.get("ref", str(tool_input)))
+    print(f"\n[GATE] Agent wants to click: {detail}")
+    return input("[GATE] Approve send? [y/N]: ").strip().lower() == "y"
 
 
 def _terminal_hitl(prompt: str) -> bool:
@@ -87,7 +86,7 @@ def run_pipeline(
     if bedrock_client is None:
         bedrock_client = BedrockClient(
             model_id=cfg.bedrock_model_id,
-            region_name=cfg.aws_region,
+            region=cfg.aws_region,
         )
     if box_client is None:
         box_client = BoxArchiveClient(
@@ -113,19 +112,39 @@ def run_pipeline(
     # ── 2. Comp ingestion + match scoring ───────────────────────────────────
     print(f"\n[2/5] Extracting search query and scoring comps...")
     structured_q = extract_query(listing, bedrock_client)
-    print(f"      Query: {structured_q.search_query!r}")
+    # Use spec.query as the e-commerce search term — it's more reliable than
+    # AI-extracted query when the FB listing has sparse/missing title data.
+    ecomm_query = spec.query
+    print(f"      Query: {ecomm_query!r}")
 
-    raw_comps = apify_client.run_ecommerce_comps(structured_q.search_query)
+    raw_comps = apify_client.run_ecommerce_comps(ecomm_query)
+
+    def _parse_price(val) -> float:
+        if val is None:
+            return 0.0
+        if isinstance(val, (int, float)):
+            return float(val)
+        import re as _re
+        cleaned = _re.sub(r"[^\d.]", "", str(val))
+        return float(cleaned) if cleaned else 0.0
+
+    def _extract_comp_price(c: dict) -> float:
+        # real eBay actor nests price under offers.price
+        offers = c.get("offers")
+        if isinstance(offers, dict):
+            return _parse_price(offers.get("price"))
+        return _parse_price(c.get("price"))
+
     comps_unscored = [
         Comp(
-            source=c.get("source", ""),
-            title=c.get("title", ""),
-            price=float(c.get("price", 0)),
+            source=c.get("source", "ebay"),
+            title=c.get("name", c.get("title", "")),
+            price=_extract_comp_price(c),
             condition=c.get("condition", ""),
             url=c.get("url", ""),
         )
         for c in raw_comps
-        if c.get("price")
+        if _extract_comp_price(c) > 0
     ]
 
     try:
@@ -181,13 +200,32 @@ def run_pipeline(
     bedrock_model = build_bedrock_model(cfg)
     agent = build_agent(bedrock_model, rails, mcp_client, hooks=[gate])
 
+    # instruction = (
+    #     f"Navigate to the Facebook Marketplace listing at {listing.url}. "
+    #     "Click the 'Message' button to open a chat with the seller. "
+    #     "A chat panel or new tab may open — follow it. "
+    #     "Once the message composer is visible, type your opening offer: "
+    #     "open with your anchor price and be friendly. "
+    #     "Then click 'Send message' to send it. "
+    #     "Follow your rails exactly — never reveal your ceiling or internal targets."
+    # )
+    opening_message = (
+        f"Hi! I'm interested in your {listing.title}. "
+        f"Would you accept ${targets.anchor:.0f}?"
+    )
     instruction = (
-        f"Navigate to the Facebook Marketplace listing at {listing.url}. "
-        "Click 'Message' or 'Contact Seller' to open the Messenger conversation with the seller. "
-        "Read any existing conversation history. "
-        "Conduct the negotiation: open with your anchor price, cite the comparable listings "
-        "as evidence, concede slowly, and work toward your target price. "
-        "Follow your rails exactly — never reveal your ceiling or internal targets."
+        f"Go to {listing.url}. "
+        f"Wait for the page to fully load. "
+        "Find and click the 'Message' button or 'Chat with seller' button on the listing. "
+        "If a login modal appears, stop and report 'login_required'. "
+        "If a chat panel opens in the same page, use it. "
+        "If a new tab or window opens, switch to it. "
+        "Wait until a message input field is visible and interactable. "
+        f"Type exactly this message into the input field: '{opening_message}' "
+        "Do not modify the message. "
+        "Click the 'Send' or 'Send message' button to submit it. "
+        "Confirm the message appears in the chat thread, then report 'success'. "
+        "If any step fails, report the step name and the error."
     )
 
     try:

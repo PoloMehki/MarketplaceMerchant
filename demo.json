@@ -1,0 +1,8 @@
+{
+  "query": "Herman Miller Aeron chair Size B",
+  "category": "furniture",
+  "acceptable_conditions": ["good", "like new", "used - good", "used - like new"],
+  "price_mode": "below_median_pct",
+  "threshold_value": 0.15,
+  "time_window_minutes": 60
+}
