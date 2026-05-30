@@ -1,0 +1,4 @@
+# pyproject.toml — Task 0.1
+# Project metadata + dependencies (strands-agents, strands-agents-tools, mcp,
+# apify-client, boxsdk, pydantic, pytest, python-dotenv).
+# Scaffold only — to be filled in during Stage 0.

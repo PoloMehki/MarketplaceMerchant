@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Secrets / local state (Stage 0)
+.env
+.fb-profile/
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE
+.idea/
+.vscode/
