@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NegoAgent</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;700;800&family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #080808;
+      --surface:  #101010;
+      --border:   #1C1C1C;
+      --text:     #E4E4E4;
+      --muted:    #474747;
+      --dim:      #2A2A2A;
+      --accent:   #CAFF00;
+      --green:    #3DDA84;
+      --amber:    #FFBE0B;
+      --red:      #FF5757;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'JetBrains Mono', monospace;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* subtle grain */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    .wrap {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 52px 28px 120px;
+    }
+
+    /* ── NAV ───────────────────────────────────────────── */
+    nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 72px;
+    }
+
+    .wordmark {
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: 15px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--text);
+    }
+
+    .badge {
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    /* ── HERO ──────────────────────────────────────────── */
+    .hero {
+      margin-bottom: 52px;
+    }
+
+    .hero h1 {
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: clamp(44px, 9vw, 76px);
+      line-height: 0.98;
+      letter-spacing: -0.025em;
+      color: var(--text);
+      margin-bottom: 24px;
+    }
+
+    .hero h1 em {
+      font-style: normal;
+      color: var(--accent);
+    }
+
+    .hero p {
+      font-size: 12px;
+      line-height: 1.7;
+      color: var(--muted);
+      font-weight: 300;
+      max-width: 440px;
+    }
+
+    /* ── TARGET CARD ───────────────────────────────────── */
+    .target-card {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      padding: 0;
+      margin-bottom: 24px;
+      position: relative;
+    }
+
+    .card-label {
+      padding: 10px 20px;
+      border-bottom: 1px solid var(--border);
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--accent);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .card-label .tag {
+      color: var(--muted);
+    }
+
+    .target-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      border-collapse: collapse;
+    }
+
+    .target-cell {
+      padding: 18px 20px;
+      border-right: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .target-cell:nth-child(3n) { border-right: none; }
+    .target-cell:nth-last-child(-n+3) { border-bottom: none; }
+
+    .target-cell label {
+      display: block;
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .target-cell .val {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .target-cell .val.listed { color: var(--red); }
+    .target-cell .val.ceil   { color: var(--amber); }
+    .target-cell .val.good   { color: var(--green); }
+
+    /* ── RUN BUTTON ────────────────────────────────────── */
+    #runBtn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      padding: 15px 28px;
+      background: var(--accent);
+      color: #000;
+      border: none;
+      font-family: 'Syne', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      cursor: pointer;
+      margin-bottom: 52px;
+      transition: opacity 0.2s, transform 0.15s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #runBtn::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: #fff;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    #runBtn:hover::before { opacity: 0.1; }
+    #runBtn:hover { transform: translateY(-1px); }
+    #runBtn:active { transform: translateY(0); }
+
+    #runBtn:disabled {
+      opacity: 0.25;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    #runBtn .btn-icon { font-size: 14px; line-height: 1; }
+
+    /* ── PIPELINE ──────────────────────────────────────── */
+    .section-label {
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+
+    .section-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    #pipelineLog {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .log-entry {
+      display: grid;
+      grid-template-columns: 36px 1fr;
+      gap: 0;
+      padding: 9px 0;
+      border-bottom: 1px solid var(--border);
+      opacity: 0;
+      transform: translateY(5px);
+      transition: opacity 0.25s ease, transform 0.25s ease;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .log-entry.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .log-pfx {
+      font-size: 11px;
+      padding-top: 1px;
+      flex-shrink: 0;
+    }
+
+    .log-txt { word-break: break-word; }
+
+    /* Type coloring */
+    .t-step  .log-pfx { color: var(--dim); }
+    .t-step  .log-txt { color: var(--muted); }
+
+    .t-found .log-pfx { color: var(--green); }
+    .t-found .log-txt { color: var(--text); }
+
+    .t-sub   .log-pfx { color: var(--dim); }
+    .t-sub   .log-txt { color: var(--muted); }
+
+    .t-flag  .log-pfx { color: var(--amber); }
+    .t-flag  .log-txt { color: var(--amber); }
+
+    .t-gate  .log-pfx { color: var(--accent); }
+    .t-gate  .log-txt { color: var(--accent); }
+
+    .t-ok    .log-pfx { color: var(--green); }
+    .t-ok    .log-txt { color: var(--green); }
+
+    .t-sent  .log-pfx { color: var(--text); }
+    .t-sent  .log-txt { color: var(--text); }
+
+    .t-recv  .log-pfx { color: var(--green); }
+    .t-recv  .log-txt { color: var(--green); font-style: italic; }
+
+    .t-bad   .log-pfx { color: var(--red); }
+    .t-bad   .log-txt { color: var(--red); }
+
+    .t-done  .log-pfx { color: var(--accent); }
+    .t-done  .log-txt { color: var(--text); font-weight: 500; }
+
+    /* spinner char */
+    .spin {
+      display: inline-block;
+      animation: spin 0.9s steps(8) infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* pulse dot */
+    .dot {
+      display: inline-block;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: currentColor;
+      margin-left: 7px;
+      vertical-align: middle;
+      animation: blink 1.1s ease-in-out infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.2; }
+    }
+
+    /* ── RESULT CARD ───────────────────────────────────── */
+    #resultCard {
+      margin-top: 36px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.4s ease, transform 0.4s ease;
+    }
+
+    #resultCard.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .result-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+    }
+
+    .result-row:last-child { border-bottom: none; }
+
+    .result-row .rl { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+    .result-row .rv { font-weight: 500; }
+
+    .rv.walked   { color: var(--red); }
+    .rv.accepted { color: var(--green); }
+
+    /* ── FOOTER ────────────────────────────────────────── */
+    footer {
+      margin-top: 80px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <nav>
+    <span class="wordmark">NegoAgent</span>
+    <span class="badge">CascadiaJS 2025</span>
+  </nav>
+
+  <div class="hero">
+    <h1>AI that<br>negotiates<br><em>for you.</em></h1>
+    <p>
+      Finds the item on Facebook Marketplace. Grounds a fair price<br>
+      in live eBay comps. Negotiates via Messenger with a human<br>
+      in the loop on every send.
+    </p>
+  </div>
+
+  <div class="target-card">
+    <div class="card-label">
+      Target item
+      <span class="tag">demo.json</span>
+    </div>
+    <div class="target-grid">
+      <div class="target-cell">
+        <label>Item</label>
+        <div class="val">MacBook Pro 14"</div>
+      </div>
+      <div class="target-cell">
+        <label>Specs</label>
+        <div class="val">M4 · 32GB · 1TB</div>
+      </div>
+      <div class="target-cell">
+        <label>Location</label>
+        <div class="val">Seattle, WA</div>
+      </div>
+      <div class="target-cell">
+        <label>Listed at</label>
+        <div class="val listed">$1,800</div>
+      </div>
+      <div class="target-cell">
+        <label>Strategy</label>
+        <div class="val">15% below median</div>
+      </div>
+      <div class="target-cell">
+        <label>Walk-away</label>
+        <div class="val ceil">$1,600</div>
+      </div>
+    </div>
+  </div>
+
+  <button id="runBtn" onclick="runDemo()">
+    <span class="btn-icon">▶</span>
+    Run Demo
+  </button>
+
+  <div class="section-label">Live pipeline</div>
+  <div id="pipelineLog"></div>
+  <div id="resultCard">
+    <div class="card-label">
+      Result
+      <span class="tag" id="resultTs"></span>
+    </div>
+    <div class="result-row">
+      <span class="rl">Status</span>
+      <span class="rv" id="rvStatus">—</span>
+    </div>
+    <div class="result-row">
+      <span class="rl">Best price found</span>
+      <span class="rv" id="rvBest">—</span>
+    </div>
+    <div class="result-row">
+      <span class="rl">Opening offer sent</span>
+      <span class="rv">$1,224</span>
+    </div>
+    <div class="result-row">
+      <span class="rl">Seller</span>
+      <span class="rv">Mehki Polo</span>
+    </div>
+    <div class="result-row">
+      <span class="rl">eBay comps used</span>
+      <span class="rv good" style="color:var(--green)">3 listings · median $1,600</span>
+    </div>
+  </div>
+
+  <footer>
+    <span>Built with Strands + Bedrock + Playwright MCP</span>
+    <span>Arturo Lopez · Mehki Polo</span>
+  </footer>
+
+</div>
+
+<script>
+  // ── sequence definition ──────────────────────────────────────────────────
+  // Each entry: { d: delay_ms_after_prev, type: css-class, p: prefix, t: text }
+
+  const SEQ = [
+    { d:  400, type:'t-step', p:'01',  t:'<span class="spin">◌</span> Searching Facebook Marketplace...' },
+    { d: 1900, type:'t-found',p:'▸',   t:'FOUND &nbsp; MacBook Pro 14" M4 32GB/1TB · <span style="color:var(--red)">$1,800</span> · "Used - Like New"' },
+    { d:  200, type:'t-sub',  p:'',    t:'&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Seller: Mehki Polo · Seattle, WA · item/1442945257599192' },
+
+    { d:  700, type:'t-step', p:'02',  t:'<span class="spin">◌</span> Scraping eBay for comparable listings...' },
+    { d: 2100, type:'t-found',p:'▸',   t:'FOUND &nbsp; 82 results · 3 in sane price range ($900–$7,200)' },
+    { d:  300, type:'t-sub',  p:'  ↳', t:'<span style="color:var(--green)">$1,600</span> &nbsp;2024 Apple MacBook Pro 14" M4 10C GPU 4.5GHz 32GB RAM 1TB' },
+    { d:  250, type:'t-sub',  p:'  ↳', t:'<span style="color:var(--amber)">$1,000</span> &nbsp;2021 Apple MacBook Pro 14" M1 Max 24C GPU 3.2GHz 32GB RAM 1T' },
+    { d:  250, type:'t-sub',  p:'  ↳', t:'<span style="color:var(--amber)">$2,200</span> &nbsp;Apple MacBook Pro 14" M4 32GB RAM 1TB SSD Gray 10-Core GPU' },
+
+    { d:  700, type:'t-step', p:'03',  t:'<span class="spin">◌</span> Assessing listing condition via vision AI...' },
+    { d: 1700, type:'t-flag', p:'⚑',   t:'FLAG &nbsp; Stated "Like New" → Assessed "Good" · dust + fingerprints visible · continued' },
+
+    { d:  600, type:'t-step', p:'04',  t:'<span class="spin">◌</span> Computing price targets from comps...' },
+    { d: 1300, type:'t-found',p:'▸',   t:'PRICES &nbsp;Anchor <b>$1,224</b> &nbsp;·&nbsp; Target <b>$1,360</b> &nbsp;·&nbsp; Walk-away <b>$1,600</b>' },
+
+    { d:  800, type:'t-gate', p:'⊕',   t:'GATE &nbsp; Human approval required before Messenger send' },
+    { d: 1600, type:'t-ok',   p:'✓',   t:'APPROVED &nbsp; Proceeding with opening offer' },
+
+    { d:  400, type:'t-sent', p:'→',   t:'SENT &nbsp; <i>"Hi! I\'m interested in your MacBook Pro 14" M4 32GB/1TB. Would you accept $1,224?"</i>' },
+
+    { d:  800, type:'t-step', p:'05',  t:'Waiting for seller reply<span class="dot"></span>' },
+    { d: 3600, type:'t-recv', p:'←',   t:'RECEIVED &nbsp; Mehki: <i>"Sorry, the lowest I\'ll go is $1,600"</i>' },
+
+    { d:  600, type:'t-bad',  p:'✕',   t:'DECISION &nbsp; $1,600 ≥ walk-away ceiling → WALK AWAY' },
+    { d:  700, type:'t-sent', p:'→',   t:'SENT &nbsp; <i>"Thanks for your time, but that price doesn\'t work for me. Good luck!"</i>' },
+
+    { d: 1000, type:'t-done', p:'■',   t:'COMPLETE &nbsp; Status: WALKED &nbsp;·&nbsp; Best price found: $1,600' },
+  ];
+
+  let running = false;
+  let timers  = [];
+
+  function runDemo() {
+    if (running) return;
+    running = true;
+
+    const btn = document.getElementById('runBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="btn-icon spin" style="display:inline-block">◌</span> Running...';
+
+    const log = document.getElementById('pipelineLog');
+    log.innerHTML = '';
+
+    const rc = document.getElementById('resultCard');
+    rc.classList.remove('show');
+
+    let cum = 0;
+
+    SEQ.forEach((step, i) => {
+      cum += step.d;
+      const t = setTimeout(() => addEntry(log, step), cum);
+      timers.push(t);
+    });
+
+    // reveal result
+    const finalT = setTimeout(() => {
+      const now = new Date();
+      document.getElementById('resultTs').textContent =
+        now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      document.getElementById('rvStatus').textContent = 'WALKED';
+      document.getElementById('rvStatus').className = 'rv walked';
+      document.getElementById('rvBest').textContent = '$1,600';
+
+      rc.classList.add('show');
+
+      btn.disabled  = false;
+      btn.innerHTML = '<span class="btn-icon">↺</span> Run Again';
+      running = false;
+    }, cum + 800);
+
+    timers.push(finalT);
+  }
+
+  function addEntry(log, step) {
+    const el = document.createElement('div');
+    el.className = `log-entry ${step.type}`;
+    el.innerHTML = `<span class="log-pfx">${step.p}</span><span class="log-txt">${step.t}</span>`;
+    log.appendChild(el);
+
+    // double-rAF trick to trigger CSS transition
+    requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('show')));
+
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+</script>
+</body>
+</html>
