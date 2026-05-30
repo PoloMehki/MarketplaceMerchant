@@ -3,23 +3,34 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NegoAgent</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;700;800&family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+  <title>MarketplaceMerchant</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='4' fill='%23f1f1e8'/><text x='16' y='23' font-family='serif' font-size='22' font-weight='700' text-anchor='middle' fill='%233e5195'>M</text></svg>" />
+  <link rel="preconnect" href="https://api.fontshare.com" crossorigin />
+  <link href="https://api.fontshare.com/v2/css?f[]=garet@900,700,400&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:       #080808;
-      --surface:  #101010;
-      --border:   #1C1C1C;
-      --text:     #E4E4E4;
-      --muted:    #474747;
-      --dim:      #2A2A2A;
-      --accent:   #CAFF00;
-      --green:    #3DDA84;
-      --amber:    #FFBE0B;
-      --red:      #FF5757;
+      /* Blue palette */
+      --bg:       #3e5195;
+      --bg-deep:  #2c3a6e;
+      --surface:  rgba(255,255,255,0.07);
+      --border:   rgba(241,241,232,0.12);
+      --border-md:rgba(241,241,232,0.22);
+
+      /* Cream hierarchy (replaces multi-hue) */
+      --text:     #f1f1e8;
+      --muted:    rgba(241,241,232,0.45);
+      --dim:      rgba(241,241,232,0.18);
+
+      --accent:   rgba(241,241,232,0.95);  /* bright: approval gate, CTA */
+      --green:    #4ade80;                 /* found / ok / received     */
+      --amber:    #fbbf24;                 /* flag / warning            */
+      --red:      #f87171;                 /* listed ask / walked       */
+
+      /* Fonts */
+      --font-sans:  "Garet", Raleway, system-ui, sans-serif;
+      --font-serif: "Times New Roman MT Condensed", "Times New Roman Condensed", "Times New Roman", Georgia, serif;
     }
 
     html { scroll-behavior: smooth; }
@@ -27,17 +38,18 @@
     body {
       background: var(--bg);
       color: var(--text);
-      font-family: 'JetBrains Mono', monospace;
+      font-family: var(--font-sans);
       min-height: 100vh;
       -webkit-font-smoothing: antialiased;
     }
 
-    /* subtle grain */
+    /* subtle dot-grid texture */
     body::after {
       content: '';
       position: fixed;
       inset: 0;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+      background-image: radial-gradient(circle, rgba(241,241,232,0.07) 1px, transparent 1px);
+      background-size: 28px 28px;
       pointer-events: none;
       z-index: 9999;
     }
@@ -57,17 +69,17 @@
     }
 
     .wordmark {
-      font-family: 'Syne', sans-serif;
-      font-weight: 800;
-      font-size: 15px;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
+      font-family: var(--font-serif);
+      font-weight: 700;
+      font-size: 16px;
+      letter-spacing: 0.02em;
       color: var(--text);
     }
 
     .badge {
+      font-family: var(--font-sans);
       font-size: 10px;
-      letter-spacing: 0.14em;
+      letter-spacing: 0.16em;
       text-transform: uppercase;
       color: var(--muted);
     }
@@ -78,25 +90,26 @@
     }
 
     .hero h1 {
-      font-family: 'Syne', sans-serif;
-      font-weight: 800;
+      font-family: var(--font-serif);
+      font-weight: 400;
       font-size: clamp(44px, 9vw, 76px);
       line-height: 0.98;
-      letter-spacing: -0.025em;
+      letter-spacing: -0.01em;
       color: var(--text);
       margin-bottom: 24px;
     }
 
     .hero h1 em {
-      font-style: normal;
+      font-style: italic;
       color: var(--accent);
     }
 
     .hero p {
+      font-family: var(--font-sans);
       font-size: 12px;
-      line-height: 1.7;
+      line-height: 1.8;
       color: var(--muted);
-      font-weight: 300;
+      font-weight: 400;
       max-width: 440px;
     }
 
@@ -107,15 +120,18 @@
       padding: 0;
       margin-bottom: 24px;
       position: relative;
+      border-radius: 6px;
+      overflow: hidden;
     }
 
     .card-label {
       padding: 10px 20px;
       border-bottom: 1px solid var(--border);
+      font-family: var(--font-sans);
       font-size: 10px;
-      letter-spacing: 0.14em;
+      letter-spacing: 0.18em;
       text-transform: uppercase;
-      color: var(--accent);
+      color: var(--text);
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -123,6 +139,7 @@
 
     .card-label .tag {
       color: var(--muted);
+      font-size: 9px;
     }
 
     .target-grid {
@@ -142,16 +159,18 @@
 
     .target-cell label {
       display: block;
-      font-size: 10px;
-      letter-spacing: 0.1em;
+      font-family: var(--font-sans);
+      font-size: 9px;
+      letter-spacing: 0.14em;
       text-transform: uppercase;
       color: var(--muted);
       margin-bottom: 6px;
     }
 
     .target-cell .val {
-      font-size: 13px;
-      font-weight: 500;
+      font-family: var(--font-serif);
+      font-size: 15px;
+      font-weight: 400;
       color: var(--text);
     }
 
@@ -167,36 +186,32 @@
       gap: 10px;
       width: 100%;
       padding: 15px 28px;
-      background: var(--accent);
-      color: #000;
-      border: none;
-      font-family: 'Syne', sans-serif;
-      font-size: 13px;
+      background: var(--text);
+      color: var(--bg-deep);
+      border: 1px solid transparent;
+      border-radius: 4px;
+      font-family: var(--font-sans);
+      font-size: 12px;
       font-weight: 700;
-      letter-spacing: 0.12em;
+      letter-spacing: 0.14em;
       text-transform: uppercase;
       cursor: pointer;
       margin-bottom: 52px;
-      transition: opacity 0.2s, transform 0.15s;
+      transition: background 0.2s, color 0.2s, border-color 0.2s, transform 0.15s;
       position: relative;
       overflow: hidden;
     }
 
-    #runBtn::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: #fff;
-      opacity: 0;
-      transition: opacity 0.2s;
+    #runBtn:hover {
+      background: var(--bg-deep);
+      color: var(--text);
+      border-color: var(--border-md);
+      transform: translateY(-1px);
     }
-
-    #runBtn:hover::before { opacity: 0.1; }
-    #runBtn:hover { transform: translateY(-1px); }
     #runBtn:active { transform: translateY(0); }
 
     #runBtn:disabled {
-      opacity: 0.25;
+      opacity: 0.3;
       cursor: not-allowed;
       transform: none;
     }
@@ -205,8 +220,9 @@
 
     /* ── PIPELINE ──────────────────────────────────────── */
     .section-label {
+      font-family: var(--font-sans);
       font-size: 10px;
-      letter-spacing: 0.14em;
+      letter-spacing: 0.2em;
       text-transform: uppercase;
       color: var(--muted);
       display: flex;
@@ -236,8 +252,9 @@
       opacity: 0;
       transform: translateY(5px);
       transition: opacity 0.25s ease, transform 0.25s ease;
+      font-family: var(--font-sans);
       font-size: 12px;
-      line-height: 1.55;
+      line-height: 1.6;
     }
 
     .log-entry.show {
@@ -249,11 +266,11 @@
       font-size: 11px;
       padding-top: 1px;
       flex-shrink: 0;
+      font-variant-numeric: tabular-nums;
     }
 
     .log-txt { word-break: break-word; }
 
-    /* Type coloring */
     .t-step  .log-pfx { color: var(--dim); }
     .t-step  .log-txt { color: var(--muted); }
 
@@ -261,13 +278,13 @@
     .t-found .log-txt { color: var(--text); }
 
     .t-sub   .log-pfx { color: var(--dim); }
-    .t-sub   .log-txt { color: var(--muted); }
+    .t-sub   .log-txt { color: var(--amber); }
 
     .t-flag  .log-pfx { color: var(--amber); }
-    .t-flag  .log-txt { color: var(--amber); }
+    .t-flag  .log-txt { color: var(--amber); font-style: italic; }
 
     .t-gate  .log-pfx { color: var(--accent); }
-    .t-gate  .log-txt { color: var(--accent); }
+    .t-gate  .log-txt { color: var(--accent); font-weight: 700; }
 
     .t-ok    .log-pfx { color: var(--green); }
     .t-ok    .log-txt { color: var(--green); }
@@ -281,8 +298,8 @@
     .t-bad   .log-pfx { color: var(--red); }
     .t-bad   .log-txt { color: var(--red); }
 
-    .t-done  .log-pfx { color: var(--accent); }
-    .t-done  .log-txt { color: var(--text); font-weight: 500; }
+    .t-done  .log-pfx { color: var(--accent); font-family: var(--font-serif); }
+    .t-done  .log-txt { color: var(--text); font-family: var(--font-serif); font-size: 13px; }
 
     /* spinner char */
     .spin {
@@ -314,8 +331,10 @@
     /* ── RESULT CARD ───────────────────────────────────── */
     #resultCard {
       margin-top: 36px;
-      border: 1px solid var(--border);
+      border: 1px solid var(--border-md);
       background: var(--surface);
+      border-radius: 6px;
+      overflow: hidden;
       opacity: 0;
       transform: translateY(10px);
       transition: opacity 0.4s ease, transform 0.4s ease;
@@ -337,8 +356,19 @@
 
     .result-row:last-child { border-bottom: none; }
 
-    .result-row .rl { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
-    .result-row .rv { font-weight: 500; }
+    .result-row .rl {
+      font-family: var(--font-sans);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .result-row .rv {
+      font-family: var(--font-serif);
+      font-size: 14px;
+      font-weight: 400;
+      color: var(--text);
+    }
 
     .rv.walked   { color: var(--red); }
     .rv.accepted { color: var(--green); }
@@ -350,8 +380,9 @@
       border-top: 1px solid var(--border);
       display: flex;
       justify-content: space-between;
+      font-family: var(--font-sans);
       font-size: 10px;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.1em;
       color: var(--muted);
     }
   </style>
@@ -360,7 +391,7 @@
 <div class="wrap">
 
   <nav>
-    <span class="wordmark">NegoAgent</span>
+    <span class="wordmark">MarketplaceMerchant</span>
     <span class="badge">CascadiaJS 2025</span>
   </nav>
 
