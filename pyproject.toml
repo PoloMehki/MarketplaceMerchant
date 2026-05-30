@@ -1,39 +1,24 @@
 [project]
 name = "negagent"
 version = "0.1.0"
-description = "Buyer-focused negotiation agent: comps, pricing, and HITL Messenger negotiation."
+description = "Buyer-focused human-in-the-loop Facebook Marketplace negotiation agent (CascadiaJS hackathon)."
+readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.6",
     "python-dotenv>=1.0",
-    # Dev A lane (data & pricing) external clients:
-    "boto3>=1.34",        # Bedrock (0.2)
-    "apify-client>=1.6",  # Apify actors (2.1, 3.1)
-    "boxsdk>=3.9",        # Box archival (7.1)
-    # NOTE (Dev B): append strands-agents, strands-agents-tools, mcp here for Stage 6.
+    "boto3>=1.34",           # Bedrock (0.2)
+    "apify-client>=1.6",     # Apify actors (2.1, 3.1)
+    "boxsdk>=3.9",           # Box archival (7.1)
+    "strands-agents",        # Dev B: Strands agent (6.2)
+    "strands-agents-tools",  # Dev B: Strands tools
+    "mcp",                   # Dev B: Playwright MCP (0.3)
     "pytest>=8.0",
 ]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
-
-[project]
-name = "negagent"
-version = "0.1.0"
-description = "Buyer-focused human-in-the-loop Facebook Marketplace negotiation agent (CascadiaJS hackathon)."
-readme = "README.md"
-requires-python = ">=3.11"
-dependencies = [
-    "strands-agents",
-    "strands-agents-tools",
-    "mcp",
-    "apify-client",
-    "boxsdk",
-    "pydantic>=2",
-    "python-dotenv",
-    "pytest",
-]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/negagent"]
